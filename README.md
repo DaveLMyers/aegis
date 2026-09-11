@@ -42,3 +42,9 @@ metrics, and a human-readable report -- to `scenarios/runs/<name>/`.
 - [docs/architecture.md](docs/architecture.md) -- components, control flow, key decisions
 - [docs/setup.md](docs/setup.md) -- full usage, including demonstrating the resilience paths
 - [docs/final-engineering-summary.md](docs/final-engineering-summary.md) -- plan, rationale, risks/trade-offs, assumptions, limitations
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch/PR/CI workflow this
+repo is actually built under. Governed by the
+[Code of Conduct](CODE_OF_CONDUCT.md). Licensed under [MIT](LICENSE).
