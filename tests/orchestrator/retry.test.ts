@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { withRetry } from '../../src/orchestrator/resilience/retry.js';
 
 describe('withRetry', () => {
@@ -43,5 +43,21 @@ describe('withRetry', () => {
       { maxAttempts: 3, backoffMs: 0, onAttempt: (attempt) => seen.push(attempt) },
     );
     expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it('stops after one attempt when isTerminal matches, without calling onAttempt', async () => {
+    class DecisionError extends Error {}
+    let calls = 0;
+    const onAttempt = vi.fn();
+    const outcome = await withRetry(
+      () => {
+        calls++;
+        throw new DecisionError('rejected');
+      },
+      { maxAttempts: 3, backoffMs: 0, onAttempt, isTerminal: (err) => err instanceof DecisionError },
+    );
+    expect(calls).toBe(1);
+    expect(outcome).toEqual({ ok: false, error: expect.any(DecisionError), attempts: 1 });
+    expect(onAttempt).not.toHaveBeenCalled();
   });
 });

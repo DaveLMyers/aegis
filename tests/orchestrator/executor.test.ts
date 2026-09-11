@@ -161,6 +161,33 @@ describe('executeGraph', () => {
     expect(ctx.records.filter((r) => r.stageId === 'design')).toHaveLength(2);
   });
 
+  it('halts immediately on an explicit release-readiness rejection, without retrying or falling back', async () => {
+    const ctx = new ProjectContext(scenario, 'run-8');
+    const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-8');
+    let releaseReadinessCalls = 0;
+    const agent = new FakeAgent({
+      'release-readiness': () => {
+        releaseReadinessCalls++;
+        return { outputs: { approved: false, releaseSummary: 'rejected by test' }, rationale: 'human said no' };
+      },
+    });
+    const options = baseOptions({ autoApprove: false });
+    const result = await executeGraph(ctx, agent, options, audit, new PolicyEngine(), projectRoot, []);
+
+    expect(result.status).toBe('halted');
+    expect(result.haltedStage).toBe('release-readiness');
+    // A rejection is a decision, not a failure to retry -- exactly one call,
+    // no re-prompting, no fallback attempt.
+    expect(releaseReadinessCalls).toBe(1);
+    expect(ctx.latest('release-readiness')?.status).toBe('halted');
+    expect(ctx.latest('release-readiness')?.attempt).toBe(1);
+    const eventTypes = audit.all().map((e) => e.type);
+    expect(eventTypes).toContain('approval-rejected');
+    expect(eventTypes).not.toContain('retry');
+    expect(eventTypes).not.toContain('fallback');
+    expect(eventTypes).not.toContain('stage-fail');
+  });
+
   it('records rationale and assumptions for audit-grade decision lineage', async () => {
     const ctx = new ProjectContext(scenario, 'run-6');
     const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-6');
