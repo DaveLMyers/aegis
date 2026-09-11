@@ -7,3 +7,5 @@ coverage/
 # runtime data for the target-project fixture (recreated on every run)
 src/target-project/data/*.db
 src/target-project/data/*.db-journal
+src/target-project/data/*.db-wal
+src/target-project/data/*.db-shm
