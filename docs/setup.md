@@ -32,6 +32,17 @@ Each run prints a status line and writes its full evidence to
 Drop `--auto-approve` to be prompted interactively at the `release-readiness`
 human-approval gate instead.
 
+> **Windows/PowerShell note:** `npm run dev -- run greenfield --auto-approve`
+> can silently drop everything after `--` when invoked from PowerShell
+> specifically (npm's own echo will show the flag missing from the forwarded
+> command) -- this is an npm/PowerShell argument-forwarding quirk, not a bug
+> in AEGIS's own CLI parsing, and Bash/macOS/Linux are unaffected. If a run
+> unexpectedly prompts for approval despite `--auto-approve`, bypass the npm
+> wrapper and invoke the script directly instead:
+> ```powershell
+> npx tsx src/orchestrator/cli.ts run greenfield --auto-approve
+> ```
+
 Every run also goes through an independent `review` stage between `testing`
 and `documentation` -- deliberately isolated from `design`/`implementation`'s
 own reasoning, reading only the actual file content produced. Its findings
