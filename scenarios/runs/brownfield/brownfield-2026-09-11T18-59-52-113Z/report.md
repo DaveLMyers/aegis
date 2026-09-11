@@ -37,4 +37,4 @@
 - Rollbacks: 0
 - Replans: 0
 - MTTR: n/a (no failures recovered in this run)
-- Total latency: 3253ms
+- Total latency: 3120ms

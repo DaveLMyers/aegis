@@ -5,6 +5,7 @@ import { greenfieldPlaybooks } from './playbooks/greenfield.js';
 import { brownfieldPlaybooks } from './playbooks/brownfield.js';
 import { ambiguousPlaybooks } from './playbooks/ambiguous.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
+import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
 
 type PlaybookFn = (ctx: ProjectContext, io: StageExecutionOptions, projectRoot: string) => Promise<StageExecutionResult> | StageExecutionResult;
 
@@ -52,9 +53,15 @@ const SHARED_PLAYBOOKS: Partial<Record<StageId, PlaybookFn>> = {
  */
 export class DeterministicAgent implements Agent {
   readonly mode = 'deterministic' as const;
-  constructor(private readonly projectRoot: string) {}
+  constructor(
+    private readonly projectRoot: string,
+    private readonly releaseVia: 'cli' | 'github-pr' = 'cli',
+  ) {}
 
   async execute(stageId: StageId, ctx: ProjectContext, io: StageExecutionOptions): Promise<StageExecutionResult> {
+    if (stageId === 'release-readiness' && this.releaseVia === 'github-pr' && !io.autoApprove) {
+      return githubReleaseReadinessPlaybook(ctx, io, this.projectRoot);
+    }
     const playbook = SHARED_PLAYBOOKS[stageId] ?? SCENARIO_PLAYBOOKS[ctx.scenario.type][stageId];
     if (!playbook) {
       throw new Error(`no deterministic playbook registered for scenario "${ctx.scenario.type}" stage "${stageId}"`);

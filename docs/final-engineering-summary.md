@@ -207,6 +207,50 @@ exactly this case). This means the guardrail had a real blind spot for as
 long as it existed prior to this fix -- worth stating plainly rather than
 quietly patching it.
 
+## Closed since: GitHub-native human approval, and a richer tech-standards decision
+
+Two more additions, both prompted directly by continued review of the working prototype:
+
+**`release-readiness` can now be approved via a real GitHub PR merge, not
+only a CLI prompt.** `--release-via=github-pr` commits the run's changes to
+a branch, pushes, opens a PR with a description generated from the run's
+own decision lineage, and polls for a human to merge or close it -- a merge
+completes the run; a close-without-merge is a rejection with automatic
+branch/PR cleanup, the same discipline the CLI path's "n" answer gets. This
+was not just unit-tested: it was run for real against an isolated clone of
+this repo, twice -- once merged (PR #11, confirmed the poller detects a
+real merge), once closed without merging (PR #12, confirmed rejection and
+cleanup, verified via `git ls-remote` that nothing was left behind
+afterward). Scoped to `--target-repo` pointed at a real GitHub URL, not to
+demoing against AEGIS's own repo, since branching there while other work is
+in progress risks tangling with it.
+
+**Tech-standards compliance moved from a hard gate to a policy `ask`, and
+the design stage now reasons about the trade-off explicitly.** Previously,
+an off-standard technology proposal just failed the `design` stage
+repeatedly until retries were exhausted, then rolled back -- the wrong
+shape for "this might be a legitimate deviation." It's now a `PolicyEngine`
+rule with severity `ask`: an off-standard proposal escalates to the same
+human-approval mechanism as everything else, and `ClaudeAgent`'s prompt for
+`design` now states the approved list up front and explicitly instructs it
+to propose 2-3 concrete alternatives with trade-offs when the requirement
+genuinely doesn't fit the standard stack -- so the human approving the
+deviation has the actual reasoning to evaluate, not just a technology name.
+
+**Considered and deliberately deferred: a genuinely multi-agent
+architecture.** AEGIS today is single-agent, multi-role -- one model
+(Claude Sonnet 5, under `AGENT_MODE=llm`) invoked separately per stage with
+a distinct persona prompt each time, not multiple concurrently-specialized
+agents. That's a legitimate, common pattern (Anthropic's own AI-native SDLC
+playbook works the same way), but it does mean the same model that
+implements a change is the one whose test-authoring shares its blind
+spots -- no genuinely independent reviewer exists yet. Recognized as the
+natural next feature (an independent review stage between `testing` and
+`release-readiness`, with no access to the implementer's own reasoning
+trail) but deliberately not built into this already-large addition. Noted
+explicitly rather than left unmentioned, since a stated reason for a scope
+boundary is worth more than an accidental gap.
+
 ## Limitations
 
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic

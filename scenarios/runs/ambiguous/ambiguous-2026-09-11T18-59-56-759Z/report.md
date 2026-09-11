@@ -28,7 +28,7 @@
 - Files changed: docs/generated/ambiguous.md
 
 ### `release-readiness` (attempt 1, passed)
-- Rationale: approved interactively by a human operator at the CLI
+- Rationale: auto-approved for a scripted/demo run (--auto-approve); a real rollout would require an interactive human sign-off at this gate
 
 ## Reliability metrics
 - Success rate: 100%
@@ -37,4 +37,4 @@
 - Rollbacks: 0
 - Replans: 0
 - MTTR: n/a (no failures recovered in this run)
-- Total latency: 3324ms
+- Total latency: 3083ms

@@ -118,6 +118,37 @@ listing of the target directory so it has real structure to reason about
 before proposing changes -- see Core Requirement 3 (Codebase Reasoning) in
 [architecture.md](./architecture.md).
 
+## Approving a release via a real GitHub PR instead of a CLI prompt
+
+By default, `release-readiness` is a terminal `y/N` prompt (or auto-approved
+with `--auto-approve`). `--release-via=github-pr` makes the approval action
+a real PR merge instead:
+
+```bash
+AGENT_MODE=llm npm run dev -- run \
+  --requirement="..." --name=my-feature \
+  --target-repo=https://github.com/you/some-repo.git \
+  --release-via=github-pr
+```
+
+The run commits everything it changed to a new branch, pushes it, opens a
+PR with a description generated from the run's own decision lineage, then
+polls (every 5s, `AEGIS_PR_POLL_TIMEOUT_MS` to override the 10-minute
+default) for a human to merge or close it. A merge completes the run with
+`approved: true`; closing without merging is treated as an explicit
+rejection -- same as answering "n" at the CLI prompt -- and the branch/PR
+are cleaned up automatically.
+
+**Requires a real GitHub-hosted remote** (`gh pr create` only works against
+one) -- this is designed for `--target-repo` pointed at an actual GitHub
+URL, not for demoing against AEGIS's own repo, since branching/committing
+there while you have your own work in progress risks tangling with it. This
+was verified end-to-end against a real (isolated) clone of this repo: PRs
+[#11](https://github.com/DaveLMyers/aegis/pull/11) (merged, confirmed the
+poller detects it) and #12 (closed without merging, confirmed rejection +
+cleanup) -- both since closed/cleaned up, not part of this repo's history
+as ongoing state.
+
 ## Resetting to a clean slate
 
 The target-project, its tests, and prior run evidence are all

@@ -1,5 +1,5 @@
 {
-  "runId": "greenfield-2026-09-11T18-28-18-809Z",
+  "runId": "ambiguous-2026-09-11T18-59-56-759Z",
   "totalStagesAttempted": 7,
   "stagesPassed": 7,
   "successRate": 1,
@@ -7,5 +7,5 @@
   "rollbackCount": 0,
   "replanCount": 0,
   "mttrMs": null,
-  "totalLatencyMs": 3237
+  "totalLatencyMs": 3083
 }

@@ -1,17 +1,17 @@
 {
-  "runId": "ambiguous-2026-09-11T18-28-29-313Z",
+  "runId": "ambiguous-2026-09-11T18-59-56-759Z",
   "scenario": {
     "name": "ambiguous",
     "type": "ambiguous",
     "requirementText": "Improve the experience for our premium/partner clients."
   },
-  "startedAt": "2026-09-11T18:28:29.315Z",
+  "startedAt": "2026-09-11T18:59:56.761Z",
   "records": [
     {
       "stageId": "requirements",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:29.316Z",
-      "endedAt": "2026-09-11T18:28:29.317Z",
+      "startedAt": "2026-09-11T18:59:56.761Z",
+      "endedAt": "2026-09-11T18:59:56.762Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -39,8 +39,8 @@
     {
       "stageId": "design",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:29.317Z",
-      "endedAt": "2026-09-11T18:28:29.319Z",
+      "startedAt": "2026-09-11T18:59:56.763Z",
+      "endedAt": "2026-09-11T18:59:56.764Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -62,8 +62,8 @@
     {
       "stageId": "implementation",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:29.319Z",
-      "endedAt": "2026-09-11T18:28:29.320Z",
+      "startedAt": "2026-09-11T18:59:56.764Z",
+      "endedAt": "2026-09-11T18:59:56.766Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -80,8 +80,8 @@
     {
       "stageId": "test-authoring",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:29.319Z",
-      "endedAt": "2026-09-11T18:28:29.320Z",
+      "startedAt": "2026-09-11T18:59:56.765Z",
+      "endedAt": "2026-09-11T18:59:56.766Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -98,13 +98,13 @@
     {
       "stageId": "testing",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:29.321Z",
-      "endedAt": "2026-09-11T18:28:32.635Z",
+      "startedAt": "2026-09-11T18:59:56.766Z",
+      "endedAt": "2026-09-11T18:59:59.842Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
         "testsPassed": true,
-        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/tiered-rate-limit.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 50\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/premium-analytics.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 65\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 82\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m3 passed\u001b[39m\u001b[22m\u001b[90m (3)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m9 passed\u001b[39m\u001b[22m\u001b[90m (9)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:28:31\n\u001b[2m   Duration \u001b[22m 949ms\u001b[2m (transform 144ms, setup 0ms, collect 960ms, tests 197ms, environment 1ms, prepare 474ms)\u001b[22m"
+        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/tiered-rate-limit.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 53\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/premium-analytics.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 65\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 75\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m3 passed\u001b[39m\u001b[22m\u001b[90m (3)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m9 passed\u001b[39m\u001b[22m\u001b[90m (9)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:59:58\n\u001b[2m   Duration \u001b[22m 880ms\u001b[2m (transform 139ms, setup 0ms, collect 937ms, tests 193ms, environment 1ms, prepare 384ms)\u001b[22m"
       },
       "rationale": "ran the target-project test suite via vitest against the freshly implemented code; all tests passed",
       "assumptions": [],
@@ -113,8 +113,8 @@
     {
       "stageId": "documentation",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:32.635Z",
-      "endedAt": "2026-09-11T18:28:32.636Z",
+      "startedAt": "2026-09-11T18:59:59.842Z",
+      "endedAt": "2026-09-11T18:59:59.843Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -131,15 +131,15 @@
     {
       "stageId": "release-readiness",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:32.636Z",
-      "endedAt": "2026-09-11T18:28:32.639Z",
+      "startedAt": "2026-09-11T18:59:59.843Z",
+      "endedAt": "2026-09-11T18:59:59.843Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
         "approved": true,
         "releaseSummary": "Release checklist for \"ambiguous\": tests PASSED."
       },
-      "rationale": "approved interactively by a human operator at the CLI",
+      "rationale": "auto-approved for a scripted/demo run (--auto-approve); a real rollout would require an interactive human sign-off at this gate",
       "assumptions": [],
       "filesChanged": []
     }
