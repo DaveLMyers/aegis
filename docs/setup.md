@@ -162,7 +162,13 @@ The target-project, its tests, and prior run evidence are all
 orchestrator-generated and safe to delete:
 
 ```bash
-rm -rf src/target-project tests/target-project scenarios/runs/*
+npm run reset
 ```
 
-Re-run the three scenarios in order (above) to rebuild from scratch.
+(Cross-platform -- a small Node script, `scripts/reset.mjs`, rather than a
+shell-specific `rm -rf` you have to remember and retype correctly.) Re-run
+the three scenarios in order (above) to rebuild from scratch. If you re-run
+an earlier scenario (e.g. `greenfield`) after a later one has already run
+without resetting first, you'll hit the known ordering limitation -- stale
+test files from the later scenario failing against the reverted code. Run
+`npm run reset` first if that happens.

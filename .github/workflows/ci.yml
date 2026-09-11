@@ -28,8 +28,7 @@ jobs:
 
       - name: Run all three orchestrator scenarios (regression gate)
         run: |
-          rm -rf src/target-project tests/target-project scenarios/runs
-          mkdir -p scenarios/runs
+          npm run reset
           npm run dev -- run greenfield --auto-approve
           npm run dev -- run brownfield --auto-approve
           npm run dev -- run ambiguous --auto-approve

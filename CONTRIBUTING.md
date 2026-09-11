@@ -30,7 +30,7 @@ three built-in scenarios from a clean slate to confirm the regression gate
 still holds:
 
 ```bash
-rm -rf src/target-project tests/target-project scenarios/runs
+npm run reset
 npm run dev -- run greenfield --auto-approve
 npm run dev -- run brownfield --auto-approve
 npm run dev -- run ambiguous --auto-approve
