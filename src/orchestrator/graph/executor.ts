@@ -19,6 +19,33 @@ interface StageOutcome {
   replan?: { stageId: StageId; reason: string };
 }
 
+/** Mutable, once-per-run flag so `--trigger-replan` fires exactly once even though the target stage necessarily runs again (at attempt 1) after the replan it caused. */
+interface ReplanTriggerState {
+  fired: boolean;
+}
+
+/** Demonstration hook for `--trigger-replan`: fires once, on the stage's first natural attempt, and only if the agent didn't already flag an invalidation itself. */
+function applyReplanTrigger(
+  node: StageNode,
+  attempt: number,
+  result: StageExecutionResult,
+  options: RunOptions,
+  state: ReplanTriggerState,
+): StageExecutionResult {
+  const trigger = options.triggerReplan;
+  if (!trigger || state.fired || trigger.atStage !== node.id || attempt !== 1 || result.upstreamInvalidated) {
+    return result;
+  }
+  state.fired = true;
+  return {
+    ...result,
+    upstreamInvalidated: {
+      stageId: trigger.targetStage,
+      reason: `demonstration: --trigger-replan forced "${node.id}" to flag "${trigger.targetStage}" as invalidated`,
+    },
+  };
+}
+
 export async function executeGraph(
   ctx: ProjectContext,
   agent: Agent,
@@ -29,6 +56,7 @@ export async function executeGraph(
   allowedWriteDirs: string[],
 ): Promise<RunResult> {
   const replanTracker = new ReplanTracker(options.maxReplans);
+  const replanTriggerState: ReplanTriggerState = { fired: false };
   const completed = new Set<StageId>();
 
   while (completed.size < STAGE_GRAPH.length) {
@@ -38,7 +66,7 @@ export async function executeGraph(
     }
 
     const outcomes = await Promise.all(
-      ready.map((node) => runStage(node, ctx, agent, options, audit, policy, projectRoot, allowedWriteDirs)),
+      ready.map((node) => runStage(node, ctx, agent, options, audit, policy, projectRoot, allowedWriteDirs, replanTriggerState)),
     );
 
     for (let i = 0; i < ready.length; i++) {
@@ -58,7 +86,12 @@ export async function executeGraph(
           { fromStage: node.id, targetStage: outcome.replan.stageId, reason: outcome.replan.reason },
           node.id,
         );
-        ctx.invalidateFrom(outcome.replan.stageId, downstreamOf);
+        // Deliberately NOT deleting the superseded records here: ctx.records
+        // is append-only everywhere else, and `latest()` already returns the
+        // newest record regardless of how much history precedes it -- so
+        // preserving what was invalidated (and why, via the audit log's
+        // 'replan' event) is what makes a replan visible in report.md
+        // instead of leaving only a bare count behind.
         const toReRun = new Set<StageId>([outcome.replan.stageId, ...downstreamOf(outcome.replan.stageId)]);
         for (const id of toReRun) completed.delete(id);
       }
@@ -77,6 +110,7 @@ async function runStage(
   policy: PolicyEngine,
   projectRoot: string,
   allowedWriteDirs: string[],
+  replanTriggerState: ReplanTriggerState,
 ): Promise<StageOutcome> {
   const entry = node.entryGate(ctx);
   if (!entry.ok) {
@@ -137,12 +171,13 @@ async function runStage(
       attempt++;
       audit.record('stage-start', { attempt }, node.id);
       const simulateFailure = isTarget && (isHardFailure || attempt === 1);
-      const result = await agent.execute(node.id, ctx, {
+      const rawResult = await agent.execute(node.id, ctx, {
         tracker,
         simulateFailure,
         fallback: false,
         autoApprove: options.autoApprove,
       });
+      const result = applyReplanTrigger(node, attempt, rawResult, options, replanTriggerState);
       await checkGatesAndPolicy(result);
       finalResult = result;
       return result;

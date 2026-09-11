@@ -47,12 +47,6 @@ export class ProjectContext {
     return true;
   }
 
-  /** Drop all records for a stage and anything downstream of it, so it can be re-run. */
-  invalidateFrom(stageId: StageId, downstreamOf: (id: StageId) => StageId[]): void {
-    const toDrop = new Set<StageId>([stageId, ...downstreamOf(stageId)]);
-    this.records = this.records.filter((r) => !toDrop.has(r.stageId));
-  }
-
   toJSON() {
     return {
       runId: this.runId,
