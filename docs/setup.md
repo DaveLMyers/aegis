@@ -86,8 +86,37 @@ cp .env.example .env
 AGENT_MODE=llm npm run dev -- run greenfield --auto-approve
 ```
 
-See "Reusability" in [architecture.md](./architecture.md) for what this path
-does and does not do today.
+`testing` and `release-readiness` always run through the same real
+mechanisms (actual `vitest` execution, actual human-approval prompt)
+regardless of agent mode -- only the generative stages (requirements,
+design, implementation, test-authoring, documentation) go through the LLM.
+
+See "Reusability" in [architecture.md](./architecture.md) for the full
+design of this path.
+
+## Giving it a genuinely new problem
+
+Two flags combine to let AEGIS build something it's never seen, rather than
+one of the three built-in scenarios:
+
+```bash
+# --requirement/--name build an ad-hoc scenario on the spot, no JSON file needed
+# --target-repo points the entire write path at an external directory or a
+# git URL (shallow-cloned into a temp dir) instead of this repo's own fixture
+AGENT_MODE=llm npm run dev -- run \
+  --requirement="Build a REST API for tracking book reading progress" \
+  --name=reading-tracker \
+  --target-repo=/path/to/some/other/repo \
+  --auto-approve
+```
+
+This only produces something useful under `AGENT_MODE=llm` -- the
+deterministic playbooks are specific to the built-in fixture's file layout
+and will fail cleanly (not silently) against an unrecognized scenario type
+or an unfamiliar codebase. `ClaudeAgent` is given a bounded file-tree
+listing of the target directory so it has real structure to reason about
+before proposing changes -- see Core Requirement 3 (Codebase Reasoning) in
+[architecture.md](./architecture.md).
 
 ## Resetting to a clean slate
 

@@ -9,7 +9,7 @@ export type StageId =
 
 export type StageStatus = 'pending' | 'running' | 'passed' | 'failed' | 'halted' | 'skipped';
 
-export type ScenarioType = 'greenfield' | 'brownfield' | 'ambiguous';
+export type ScenarioType = 'greenfield' | 'brownfield' | 'ambiguous' | 'adhoc';
 
 export interface ScenarioDefinition {
   name: string;

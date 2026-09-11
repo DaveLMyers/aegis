@@ -28,6 +28,8 @@ export interface PolicyContext {
   testingStageStatus: 'passed' | 'failed' | 'unknown';
   projectRoot: string;
   allowedWriteDirs: string[];
+  /** Actual file content written this attempt (from ChangeTracker.writtenContent()) -- what the secret scan needs, since generated code lives here, not in a stage's scalar `outputs`. */
+  writtenFiles?: Array<{ path: string; content: string }>;
 }
 
 const SECRET_PATTERNS = [
@@ -68,8 +70,14 @@ export class PolicyEngine {
       });
     }
 
-    const contentBlobs = Object.values(ctx.result.outputs).filter((v): v is string => typeof v === 'string');
-    for (const blob of contentBlobs) {
+    // Scan both the stage's scalar outputs (design docs, rationale-adjacent
+    // strings, etc.) AND the actual content of any files it wrote -- the
+    // latter is where generated code lives, and scanning only `outputs`
+    // would silently miss it entirely (outputs.filesChanged is just a list
+    // of paths, never the content).
+    const outputBlobs = Object.values(ctx.result.outputs).filter((v): v is string => typeof v === 'string');
+    const fileBlobs = (ctx.writtenFiles ?? []).map((f) => f.content);
+    for (const blob of [...outputBlobs, ...fileBlobs]) {
       for (const pattern of SECRET_PATTERNS) {
         if (pattern.test(blob)) {
           violations.push({

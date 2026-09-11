@@ -50,4 +50,10 @@ describe('ChangeTracker', () => {
     tracker.writeFile('b.txt', '2');
     expect(tracker.changedFiles()).toEqual([join(projectRoot, 'a.txt'), join(projectRoot, 'b.txt')]);
   });
+
+  it('exposes the actual content written, for policy scanning', () => {
+    const tracker = new ChangeTracker(projectRoot);
+    tracker.writeFile('a.txt', 'hello world');
+    expect(tracker.writtenContent()).toEqual([{ path: join(projectRoot, 'a.txt'), content: 'hello world' }]);
+  });
 });

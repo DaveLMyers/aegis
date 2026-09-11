@@ -105,31 +105,50 @@ in the captured runs; the mechanism is real and unit-tested
 (`tests/orchestrator/gate.test.ts`), just not visibly exercised by these
 particular scenarios.
 
-## Reusability: engine vs. agent vs. playbook
+## Reusability: engine vs. agent vs. playbook vs. target
 
 A natural question: is this built for URL shorteners specifically, or is it
-a system that could take a different requirement entirely?
+a system that could take a different requirement entirely, against a
+codebase it's never seen? As of this session, that question has a real
+answer, not just an aspirational one.
 
-- **The engine is already fully generic.** Nothing in `graph/`, `gates/`,
+- **The engine is fully generic.** Nothing in `graph/`, `gates/`,
   `resilience/`, `policy/`, `observability/`, or `replanner.ts` knows what a
   URL shortener is. Hand it a different `ScenarioDefinition` and it runs the
   identical governed pipeline.
 - **`DeterministicAgent` is deliberately domain-specific.** Its playbooks are
-  a fixed, hand-authored catalog keyed to `(scenario type, stage)` for this
-  assignment. Feed it an unrecognized scenario type and it throws rather than
-  improvising -- that's intentional: safe, reproducible, zero API cost, but
-  bounded to known task shapes.
-- **`ClaudeAgent` is the actual path to generality.** It has no playbooks; it
-  sends the real requirement and stage context to Claude and uses the live
-  response. In principle it can reason about an arbitrary new requirement,
-  not just this one.
-- **The honest gap:** `ClaudeAgent` does not yet parse generated code back out
-  and write it via `ChangeTracker` the way the deterministic playbooks do. It
-  demonstrates genuine per-stage LLM reasoning, but a production version
-  would need that wiring to actually mutate an arbitrary target project, not
-  only narrate what it would do. That's the concrete next step toward "give
-  it a different problem and it builds it" -- not a rebuild, a completion of
-  a seam that already exists.
+  a fixed, hand-authored catalog keyed to `(scenario type, stage)` for the
+  three built-in scenarios. Feed it an unrecognized scenario type (`adhoc`,
+  see below) and it throws rather than improvising -- intentional: safe,
+  reproducible, zero API cost, but bounded to known task shapes.
+- **`ClaudeAgent` is the path to genuine generality, and it now closes the
+  loop.** It has no playbooks; it sends the real requirement and stage
+  context to Claude, and it parses `files: [{path, content}]` out of the
+  response and writes each one via `ChangeTracker` -- the same rollback-aware
+  write path the deterministic playbooks use. A prior version of this
+  document named this as an open gap ("demonstrates reasoning, not yet
+  generation"); it's closed.
+- **The fixture the engine writes into is no longer hardcoded either.**
+  `aegis run --requirement="<text>" --name=<slug> --target-repo=<path-or-url>`
+  builds an ad-hoc `ScenarioDefinition` from a freeform requirement and points
+  the entire write path (`ChangeTracker`, `PolicyEngine`'s allowed-write-dirs
+  check) at an external directory instead of `src/target-project` -- a local
+  path is used directly, a URL is shallow-cloned into a temp dir first, and
+  both are treated identically. This is what actually proves "give it a
+  different problem" rather than just asserting the engine is decoupled:
+  AEGIS operating on a codebase it has never seen, under the exact same
+  gates, is the real test.
+- **Honest boundary that remains:** `--target-repo` only does something
+  useful under `AGENT_MODE=llm`. `DeterministicAgent`'s playbooks write fixed
+  paths like `src/target-project/db.ts`; pointed at an arbitrary external
+  repo, that's not meaningful. The CLI warns rather than silently no-opping
+  if you combine `--target-repo` with the deterministic agent.
+- **A side effect worth naming:** the tech-standards gate (`design`'s exit
+  gate checking proposed technologies against `policy/techStandards.ts`) was
+  previously real but never exercised, since all three built-in scenarios use
+  the one pre-approved stack. An ad-hoc requirement run through `ClaudeAgent`
+  is free to propose a different stack -- the first time this gate can
+  actually fire for real rather than only being unit-tested.
 
 ## Known complexity/maintainability trade-offs
 

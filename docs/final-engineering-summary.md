@@ -79,6 +79,20 @@ The pattern across every non-"Built" row is the same: a stated reason, and
 where it represents real future work, a tracked issue -- not a gap a
 reviewer has to discover on their own.
 
+**If this shipped to production**, rather than building the infrastructure
+for a prototype, here's the concrete pipeline it would go through: build →
+version (semver tag on the commit) → push a build artifact to a registry →
+deploy to staging → smoke test against `/health` → promote to production
+behind the exact same `release-readiness` human-approval gate that already
+exists in this engine, just re-pointed at a real deployment action instead
+of a local file-system change → monitored in production via a real
+metrics/alerting stack (e.g. the `/health` endpoint polled by an uptime
+checker, structured logs shipped to a log aggregator, the existing audit
+trail's shape extended to also emit to that aggregator). The governance
+model doesn't change for this -- the same gate, retry, and rollback
+machinery already built would gate a real deployment exactly the way it
+gates a local file write today.
+
 ## Risks, trade-offs, and what was actually caught
 
 Two real bugs were found and fixed during the build, both worth naming
@@ -151,14 +165,50 @@ implicit:
   a demo; a production deployment would tune these per stage based on
   observed failure rates from the metrics this engine already collects.
 
+## Closed since the initial submission: genuine "give it a new problem" capability
+
+The gap originally named here -- `ClaudeAgent` demonstrating reasoning but
+not actually writing code -- is closed. Three things changed together,
+prompted by walking through exactly this question with the user:
+
+1. **`ClaudeAgent` now writes files.** It parses `files: [{path, content}]`
+   out of the model's response and writes each one via the same
+   rollback-aware `ChangeTracker` the deterministic playbooks use.
+2. **The requirement and the target are no longer hardcoded.**
+   `--requirement="<text>" --name=<slug>` builds an ad-hoc `ScenarioDefinition`
+   on the spot; `--target-repo=<path-or-url>` points the entire write path at
+   an external directory (or a shallow-cloned URL) instead of
+   `src/target-project`. A local path and a cloned URL are handled
+   identically -- see "Reusability" in `docs/architecture.md`.
+3. **`ClaudeAgent` is given real codebase context.** A bounded file-tree
+   listing of the target directory (`agents/codebaseSnapshot.ts`) is
+   included in the prompt for every generative stage, so "identify impacted
+   modules" (Core Requirement 3) is answerable against real structure for an
+   unfamiliar target, not just the one built-in brownfield scenario.
+
+**A bug caught while wiring this up, not before:** prior to this change,
+`AGENT_MODE=llm` routed *every* stage through the model -- including
+`testing` and `release-readiness`. That meant the model could self-report
+`testsPassed: true` without anything being verified, and self-approve its
+own release. Both are now hardcoded to the same real mechanisms regardless
+of agent mode (`testingPlaybook` actually runs `vitest`; the approval gate
+is the same CLI prompt / `--auto-approve`) -- the LLM only handles the five
+genuinely generative stages. This is exactly the kind of thing "validation
+and risk control" is supposed to catch, and it's worth naming that it was
+caught by scrutiny during a feature addition, not present from the start.
+
+**Also caught in the same pass: the secret scanner was scanning the wrong
+thing.** `PolicyEngine`'s secret-pattern check only ever looked at a stage's
+scalar string `outputs` -- but generated code lives in file *content*
+written via `ChangeTracker`, which was never included in the scan. Fixed by
+having `ChangeTracker` expose `writtenContent()` and having the policy check
+scan that too (`tests/orchestrator/policy.test.ts` has a regression test for
+exactly this case). This means the guardrail had a real blind spot for as
+long as it existed prior to this fix -- worth stating plainly rather than
+quietly patching it.
+
 ## Limitations
 
-- **`ClaudeAgent` doesn't close the loop.** It gets a real model response per
-  stage but doesn't parse code back out of it and write it via
-  `ChangeTracker` -- so `AGENT_MODE=llm` demonstrates genuine reasoning, not
-  yet genuine arbitrary-problem code generation. This is the single biggest
-  gap between "built for this problem" and "a system that solves the next
-  one you hand it."
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic
   agent's fallback attempt currently re-applies the same primary template
   rather than a genuinely lower-fidelity alternative. The fallback *path* is

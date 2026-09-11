@@ -62,4 +62,29 @@ describe('PolicyEngine', () => {
     );
     expect(result.decision).toBe('block');
   });
+
+  it('scans actual written file content for secrets, not just scalar outputs', () => {
+    // Regression case: outputs.filesChanged is a list of paths, never file
+    // content -- a secret sitting only in a written file's content, with
+    // clean scalar outputs, must still be caught.
+    const engine = new PolicyEngine();
+    const result = engine.check(
+      ctx({
+        result: { outputs: { filesChanged: ['src/target-project/config.ts'] }, rationale: 'test' },
+        writtenFiles: [{ path: '/project/src/target-project/config.ts', content: 'const key = "AKIAABCDEFGHIJKLMNOP";' }],
+      }),
+    );
+    expect(result.decision).toBe('ask');
+  });
+
+  it('does not flag clean written file content', () => {
+    const engine = new PolicyEngine();
+    const result = engine.check(
+      ctx({
+        result: { outputs: { filesChanged: ['src/target-project/routes.ts'] }, rationale: 'test' },
+        writtenFiles: [{ path: '/project/src/target-project/routes.ts', content: 'export const x = 1;' }],
+      }),
+    );
+    expect(result.decision).toBe('allow');
+  });
 });

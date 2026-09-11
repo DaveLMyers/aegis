@@ -1,17 +1,17 @@
 {
-  "runId": "greenfield-2026-09-11T17-33-35-334Z",
+  "runId": "greenfield-2026-09-11T18-11-55-153Z",
   "scenario": {
     "name": "greenfield",
     "type": "greenfield",
     "requirementText": "Build the core URL shortener: create a short link, redirect by code with click tracking, and expose per-code click analytics."
   },
-  "startedAt": "2026-09-11T17:33:35.335Z",
+  "startedAt": "2026-09-11T18:11:55.155Z",
   "records": [
     {
       "stageId": "requirements",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:35.336Z",
-      "endedAt": "2026-09-11T17:33:35.337Z",
+      "startedAt": "2026-09-11T18:11:55.155Z",
+      "endedAt": "2026-09-11T18:11:55.156Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -38,8 +38,8 @@
     {
       "stageId": "design",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:35.337Z",
-      "endedAt": "2026-09-11T17:33:35.338Z",
+      "startedAt": "2026-09-11T18:11:55.157Z",
+      "endedAt": "2026-09-11T18:11:55.158Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -67,8 +67,8 @@
     {
       "stageId": "implementation",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:35.338Z",
-      "endedAt": "2026-09-11T17:33:35.342Z",
+      "startedAt": "2026-09-11T18:11:55.158Z",
+      "endedAt": "2026-09-11T18:11:55.162Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -97,8 +97,8 @@
     {
       "stageId": "test-authoring",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:35.341Z",
-      "endedAt": "2026-09-11T17:33:35.342Z",
+      "startedAt": "2026-09-11T18:11:55.160Z",
+      "endedAt": "2026-09-11T18:11:55.162Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -115,13 +115,13 @@
     {
       "stageId": "testing",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:35.342Z",
-      "endedAt": "2026-09-11T17:33:38.470Z",
+      "startedAt": "2026-09-11T18:11:55.162Z",
+      "endedAt": "2026-09-11T18:11:58.301Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
         "testsPassed": true,
-        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 72\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m5 passed\u001b[39m\u001b[22m\u001b[90m (5)\u001b[39m\n\u001b[2m   Start at \u001b[22m 12:33:37\n\u001b[2m   Duration \u001b[22m 922ms\u001b[2m (transform 77ms, setup 0ms, collect 348ms, tests 72ms, environment 0ms, prepare 135ms)\u001b[22m"
+        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 72\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m1 passed\u001b[39m\u001b[22m\u001b[90m (1)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m5 passed\u001b[39m\u001b[22m\u001b[90m (5)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:11:57\n\u001b[2m   Duration \u001b[22m 871ms\u001b[2m (transform 77ms, setup 0ms, collect 309ms, tests 72ms, environment 0ms, prepare 128ms)\u001b[22m"
       },
       "rationale": "ran the target-project test suite via vitest against the freshly implemented code; all tests passed",
       "assumptions": [],
@@ -130,8 +130,8 @@
     {
       "stageId": "documentation",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:38.470Z",
-      "endedAt": "2026-09-11T17:33:38.471Z",
+      "startedAt": "2026-09-11T18:11:58.302Z",
+      "endedAt": "2026-09-11T18:11:58.302Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -148,8 +148,8 @@
     {
       "stageId": "release-readiness",
       "attempt": 1,
-      "startedAt": "2026-09-11T17:33:38.471Z",
-      "endedAt": "2026-09-11T17:33:38.472Z",
+      "startedAt": "2026-09-11T18:11:58.303Z",
+      "endedAt": "2026-09-11T18:11:58.303Z",
       "status": "passed",
       "inputs": {},
       "outputs": {

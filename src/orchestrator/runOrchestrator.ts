@@ -16,15 +16,21 @@ export interface RunSummary {
   outputDir: string;
 }
 
-const ALLOWED_WRITE_DIRS = ['src/target-project', 'tests/target-project', 'docs/generated'];
+export const FIXTURE_ALLOWED_WRITE_DIRS = ['src/target-project', 'tests/target-project', 'docs/generated'];
+/** Used with `--target-repo`: the target is someone else's project, so "allowed" is just "inside the clone," not our fixture's specific folder layout. */
+export const EXTERNAL_TARGET_ALLOWED_WRITE_DIRS = ['.'];
 
 export async function runScenario(
   scenario: ScenarioDefinition,
   options: RunOptions,
-  projectRoot: string,
+  /** Where scenario configs and run evidence (scenarios/runs/...) live -- always the AEGIS repo itself, regardless of what's being built. */
+  evidenceRoot: string,
+  /** Where the agent actually writes code -- the AEGIS repo's own fixture by default, or an external `--target-repo` clone/path. */
+  targetProjectRoot: string,
+  allowedWriteDirs: string[],
 ): Promise<RunSummary> {
   const runId = `${scenario.name}-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-  const outputDir = join(projectRoot, 'scenarios', 'runs', scenario.name, runId);
+  const outputDir = join(evidenceRoot, 'scenarios', 'runs', scenario.name, runId);
   mkdirSync(outputDir, { recursive: true });
 
   const ctx = new ProjectContext(scenario, runId);
@@ -34,9 +40,9 @@ export async function runScenario(
   let agent: Agent;
   if (options.agentMode === 'llm') {
     const { ClaudeAgent } = await import('./agents/claudeAgent.js');
-    agent = new ClaudeAgent();
+    agent = new ClaudeAgent(targetProjectRoot);
   } else {
-    agent = new DeterministicAgent(projectRoot);
+    agent = new DeterministicAgent(targetProjectRoot);
   }
 
   audit.record('run-start', {
@@ -44,11 +50,12 @@ export async function runScenario(
     type: scenario.type,
     agentMode: options.agentMode,
     autoApprove: options.autoApprove,
+    targetProjectRoot,
     injectFailureAt: options.injectFailureAt ?? null,
     injectFailureSeverity: options.injectFailureSeverity ?? null,
   });
 
-  const result = await executeGraph(ctx, agent, options, audit, policy, projectRoot, ALLOWED_WRITE_DIRS);
+  const result = await executeGraph(ctx, agent, options, audit, policy, targetProjectRoot, allowedWriteDirs);
 
   audit.record('run-end', { status: result.status, haltedStage: result.haltedStage ?? null });
 

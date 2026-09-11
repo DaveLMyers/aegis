@@ -30,6 +30,11 @@ const SCENARIO_PLAYBOOKS: Record<ScenarioType, Partial<Record<StageId, PlaybookF
     'test-authoring': ambiguousPlaybooks.testAuthoring,
     documentation: ambiguousPlaybooks.documentation,
   },
+  // No deterministic playbooks for ad-hoc requirements -- by design. An
+  // arbitrary requirement has no known-good template; it correctly throws
+  // below rather than pretending to handle it. AGENT_MODE=llm is the actual
+  // path for this scenario type.
+  adhoc: {},
 };
 
 // Shared across every scenario type regardless of what's scenario-specific above.

@@ -109,6 +109,7 @@ async function runStage(
       testingStageStatus: testingStatus,
       projectRoot,
       allowedWriteDirs,
+      writtenFiles: tracker.writtenContent(),
     });
     const messages = policyResult.violations.map((v) => v.message);
 

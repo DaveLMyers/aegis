@@ -5,6 +5,7 @@ interface FileBackup {
   path: string;
   existedBefore: boolean;
   previousContent: string | null;
+  newContent: string;
 }
 
 /**
@@ -24,6 +25,7 @@ export class ChangeTracker {
       path: abs,
       existedBefore,
       previousContent: existedBefore ? readFileSync(abs, 'utf-8') : null,
+      newContent: content,
     });
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, content, 'utf-8');
@@ -31,6 +33,11 @@ export class ChangeTracker {
 
   changedFiles(): string[] {
     return this.backups.map((b) => b.path);
+  }
+
+  /** The content actually written this stage attempt -- what the policy engine's secret scan needs to inspect, since generated code lives here, not in a stage's scalar `outputs`. */
+  writtenContent(): Array<{ path: string; content: string }> {
+    return this.backups.map((b) => ({ path: b.path, content: b.newContent }));
   }
 
   rollback(): string[] {
