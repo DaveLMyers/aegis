@@ -26,7 +26,10 @@ export class ClaudeAgent implements Agent {
     if (!apiKey) {
       throw new Error('AGENT_MODE=llm requires ANTHROPIC_API_KEY to be set');
     }
-    this.client = new Anthropic({ apiKey });
+    // Explicit rather than relying on the SDK default -- a hung request
+    // should occupy at most one bounded retry attempt, not tie up a stage
+    // indefinitely.
+    this.client = new Anthropic({ apiKey, timeout: 30_000 });
   }
 
   async execute(stageId: StageId, ctx: ProjectContext, io: StageExecutionOptions): Promise<StageExecutionResult> {

@@ -3,6 +3,14 @@ import request from 'supertest';
 import { createServer } from '../../src/target-project/server.js';
 
 describe('url shortener API', () => {
+  it('exposes a health check that verifies DB connectivity', async () => {
+    const app = createServer(':memory:');
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(typeof res.body.uptime).toBe('number');
+  });
+
   it('creates a short link and redirects to the target', async () => {
     const app = createServer(':memory:');
     const createRes = await request(app).post('/links').send({ targetUrl: 'https://example.com' });

@@ -356,6 +356,19 @@ export function createServer(dbPath?: string) {
   const db = createDb(dbPath);
   startClickConsumer(db);
   const app = express();
+
+  // Health/readiness check -- registered before rate limiting so monitoring
+  // probes are never throttled, and it actually verifies the DB is reachable
+  // rather than just confirming the process is alive.
+  app.get('/health', (_req, res) => {
+    try {
+      db.prepare('SELECT 1').get();
+      res.status(200).json({ status: 'ok', uptime: process.uptime() });
+    } catch {
+      res.status(503).json({ status: 'unavailable' });
+    }
+  });
+
   app.use(express.json());
   app.use(rateLimit);
   app.use('/', createLinksRouter(db));
@@ -374,6 +387,20 @@ export function createServer(dbPath?: string) {
   const db = createDb(dbPath);
   startClickConsumer(db);
   const app = express();
+
+  // Health/readiness check -- registered before the tiered limiter (which
+  // otherwise matches any single-segment path, "/health" included) so
+  // monitoring probes are never throttled, and it verifies the DB is
+  // actually reachable rather than just confirming the process is alive.
+  app.get('/health', (_req, res) => {
+    try {
+      db.prepare('SELECT 1').get();
+      res.status(200).json({ status: 'ok', uptime: process.uptime() });
+    } catch {
+      res.status(503).json({ status: 'unavailable' });
+    }
+  });
+
   app.use(express.json());
   app.use('/:code', createTieredRateLimit(db));
   app.use('/', createLinksRouter(db));
@@ -395,6 +422,14 @@ import request from 'supertest';
 import { createServer } from '../../src/target-project/server.js';
 
 describe('url shortener API', () => {
+  it('exposes a health check that verifies DB connectivity', async () => {
+    const app = createServer(':memory:');
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(typeof res.body.uptime).toBe('number');
+  });
+
   it('creates a short link and redirects to the target', async () => {
     const app = createServer(':memory:');
     const createRes = await request(app).post('/links').send({ targetUrl: 'https://example.com' });

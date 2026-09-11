@@ -55,6 +55,30 @@ happened in that order.
   URL-shortener playbooks at all, so those tests would keep passing even if
   the target project changed completely.
 
+## Production-readiness checklist
+
+The brief's Expectation section asks this to be treated as production-grade
+engineering work. Rather than assert that, here's a direct accounting
+against it -- what's built, what's partial, and what's a named, deliberate
+gap with a tracked backlog issue behind it, versus something simply not
+considered.
+
+| Area | Status | Detail |
+|---|---|---|
+| Correctness & testing | Built | 39 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, the full suite, and a from-scratch regression run of all three scenarios on every push. |
+| Resilience | Built | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. |
+| Governance / audit | Built | Every gate decision, retry, rollback, and approval is logged to an append-only trail. Policy engine enforces change-control, release-control, tech-standards compliance, and a three-way allow/ask/block secret-scan escalation. |
+| API health/readiness | Built | `GET /health` checks live DB connectivity (not just process liveness) and is registered ahead of rate limiting so monitoring probes are never throttled. |
+| External API timeouts | Built | `ClaudeAgent`'s Anthropic client sets an explicit 30s timeout rather than relying on SDK defaults, bounding how long a hung LLM call can occupy a retry attempt. |
+| Authentication | **Named gap** | `POST /links` has no auth -- anyone can create a link. This is exactly why the service was not deployed publicly (see below). Tracked as [issue #7](https://github.com/DaveLMyers/aegis/issues/7). |
+| Horizontal scalability | **Named gap** | SQLite, the in-process rate limiter, and the in-process click-event bus are all single-instance; concurrent orchestrator runs against the same project root would also race. Tracked as [issue #8](https://github.com/DaveLMyers/aegis/issues/8). |
+| Alerting | Out of scope | No monitoring backend exists to alert into, since nothing is deployed. The `/health` endpoint and the audit log are what a real alerting setup would consume; wiring actual alerts is infra work outside a prototype's scope. |
+| Deployment | **Deliberate, not done** | Not deployed live -- open, unauthenticated link creation is a real abuse surface (spam/phishing redirects), and the brief asks for a runnable prototype, not a hosted one. A Dockerfile is tracked as [issue #5](https://github.com/DaveLMyers/aegis/issues/5) so deployability is demonstrable without operating a public instance. |
+
+The pattern across every non-"Built" row is the same: a stated reason, and
+where it represents real future work, a tracked issue -- not a gap a
+reviewer has to discover on their own.
+
 ## Risks, trade-offs, and what was actually caught
 
 Two real bugs were found and fixed during the build, both worth naming
