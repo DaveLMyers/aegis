@@ -25,6 +25,8 @@ export interface RunOptions {
   injectFailureAt?: StageId;
   /** "transient" fails only the first attempt (retry recovers it). "hard" fails every attempt including the fallback (forces rollback + safe-stop). */
   injectFailureSeverity?: 'transient' | 'hard';
+  /** Demonstration hook: forces `atStage`'s first-attempt result to carry an `upstreamInvalidated` pointing at `targetStage`, so the re-planner fires in a real, captured scenario run instead of only in a unit test. */
+  triggerReplan?: { atStage: StageId; targetStage: StageId };
   maxRetries: number;
   maxReplans: number;
 }

@@ -24,9 +24,17 @@ export function computeMetrics(runId: string, events: AuditEvent[]): RunMetrics 
   const totalLatencyMs =
     startEvent && endEvent ? Date.parse(endEvent.ts) - Date.parse(startEvent.ts) : 0;
 
-  const stagePasses = events.filter((e) => e.type === 'stage-pass');
   const stageFails = events.filter((e) => e.type === 'stage-fail');
-  const attempted = new Set(events.filter((e) => e.type === 'stage-start').map((e) => e.stageId)).size;
+
+  // Both sides counted by UNIQUE stage id, not by event count -- a stage
+  // that passes twice (once before a replan, once after) must not inflate
+  // the numerator past the denominator. "Success rate" means "what fraction
+  // of the graph's stages ultimately succeeded," not "how many pass events
+  // fired."
+  const attemptedStages = new Set(events.filter((e) => e.type === 'stage-start').map((e) => e.stageId));
+  const passedStages = new Set(events.filter((e) => e.type === 'stage-pass').map((e) => e.stageId));
+  const attempted = attemptedStages.size;
+  const stagesPassed = passedStages.size;
 
   const retryCount = events.filter((e) => e.type === 'retry').length;
   const rollbackCount = events.filter((e) => e.type === 'rollback').length;
@@ -51,8 +59,8 @@ export function computeMetrics(runId: string, events: AuditEvent[]): RunMetrics 
   return {
     runId,
     totalStagesAttempted: attempted,
-    stagesPassed: stagePasses.length,
-    successRate: attempted > 0 ? stagePasses.length / attempted : 0,
+    stagesPassed,
+    successRate: attempted > 0 ? stagesPassed / attempted : 0,
     retryCount,
     rollbackCount,
     replanCount,

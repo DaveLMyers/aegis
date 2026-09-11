@@ -7,7 +7,7 @@ import { computeMetrics, type RunMetrics } from './observability/metrics.js';
 import { executeGraph, type RunResult } from './graph/executor.js';
 import { DeterministicAgent } from './agents/deterministicAgent.js';
 import type { Agent } from './agents/agent.js';
-import type { RunOptions, ScenarioDefinition } from './types.js';
+import type { AuditEvent, RunOptions, ScenarioDefinition } from './types.js';
 
 export interface RunSummary {
   runId: string;
@@ -63,12 +63,18 @@ export async function runScenario(
 
   writeFileSync(join(outputDir, 'context.json'), JSON.stringify(ctx.toJSON(), null, 2), 'utf-8');
   writeFileSync(join(outputDir, 'metrics.json'), JSON.stringify(metrics, null, 2), 'utf-8');
-  writeFileSync(join(outputDir, 'report.md'), renderReport(scenario, result, ctx, metrics), 'utf-8');
+  writeFileSync(join(outputDir, 'report.md'), renderReport(scenario, result, ctx, metrics, audit.all()), 'utf-8');
 
   return { runId, status: result.status, haltedStage: result.haltedStage, outputDir };
 }
 
-function renderReport(scenario: ScenarioDefinition, result: RunResult, ctx: ProjectContext, metrics: RunMetrics): string {
+function renderReport(
+  scenario: ScenarioDefinition,
+  result: RunResult,
+  ctx: ProjectContext,
+  metrics: RunMetrics,
+  events: AuditEvent[],
+): string {
   const lines: string[] = [];
   lines.push(`# AEGIS run report -- ${scenario.name}`);
   lines.push('');
@@ -76,6 +82,17 @@ function renderReport(scenario: ScenarioDefinition, result: RunResult, ctx: Proj
   lines.push(`**Requirement:** ${scenario.requirementText}`);
   lines.push(`**Status:** ${result.status}${result.haltedStage ? ` (halted at \`${result.haltedStage}\`)` : ''}`);
   lines.push('');
+  const replanEvents = events.filter((e) => e.type === 'replan');
+  if (replanEvents.length > 0) {
+    lines.push('## Re-planning events');
+    for (const event of replanEvents) {
+      lines.push(
+        `- \`${event.details.fromStage}\` flagged \`${event.details.targetStage}\` as invalidated: ${event.details.reason}`,
+      );
+    }
+    lines.push('(the stage-by-stage lineage below includes both the pre- and post-replan records for every affected stage, in order -- nothing is pruned.)');
+    lines.push('');
+  }
   lines.push('## Stage-by-stage decision lineage');
   for (const record of ctx.records) {
     lines.push(`### \`${record.stageId}\` (attempt ${record.attempt}, ${record.status})`);

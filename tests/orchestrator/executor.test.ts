@@ -134,7 +134,29 @@ describe('executeGraph', () => {
     expect(result.status).toBe('completed');
     expect(testingCalls).toBe(2);
     expect(audit.all().filter((e) => e.type === 'replan')).toHaveLength(1);
-    expect(ctx.records.filter((r) => r.stageId === 'design')).toHaveLength(1);
+    expect(ctx.records.filter((r) => r.stageId === 'design')).toHaveLength(2);
+  });
+
+  it('--trigger-replan forces a re-plan even when the agent itself never flags one', async () => {
+    // Unlike the test above, this FakeAgent never sets upstreamInvalidated --
+    // RunOptions.triggerReplan is what injects it, at the executor level,
+    // proving the demonstration flag actually drives the real mechanism.
+    const ctx = new ProjectContext(scenario, 'run-7');
+    const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-7');
+    let testingCalls = 0;
+    const agent = new FakeAgent({
+      testing: (io) => {
+        testingCalls++;
+        return defaultOutputsFor('testing', io);
+      },
+    });
+    const options = baseOptions({ triggerReplan: { atStage: 'testing', targetStage: 'design' } });
+    const result = await executeGraph(ctx, agent, options, audit, new PolicyEngine(), projectRoot, []);
+
+    expect(result.status).toBe('completed');
+    expect(testingCalls).toBe(2);
+    expect(audit.all().filter((e) => e.type === 'replan')).toHaveLength(1);
+    expect(ctx.records.filter((r) => r.stageId === 'design')).toHaveLength(2);
   });
 
   it('records rationale and assumptions for audit-grade decision lineage', async () => {

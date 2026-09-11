@@ -50,7 +50,7 @@ async function main() {
     console.error(
       [
         'usage:',
-        '  aegis run <scenario-name> [--auto-approve] [--inject-failure=<stageId>] [--inject-failure-severity=transient|hard]',
+        '  aegis run <scenario-name> [--auto-approve] [--inject-failure=<stageId>] [--inject-failure-severity=transient|hard] [--trigger-replan=<atStage>:<targetStage>]',
         '  aegis run --requirement="<text>" --name=<slug> [--auto-approve] [--target-repo=<path-or-url>]',
         '',
         'AGENT_MODE=llm (requires ANTHROPIC_API_KEY) uses the real Claude-backed agent instead of the',
@@ -95,11 +95,24 @@ async function main() {
     allowedWriteDirs = EXTERNAL_TARGET_ALLOWED_WRITE_DIRS;
   }
 
+  let triggerReplan: RunOptions['triggerReplan'];
+  const triggerReplanArg = flags.get('trigger-replan');
+  if (triggerReplanArg) {
+    const [atStage, targetStage] = triggerReplanArg.split(':');
+    if (!atStage || !targetStage) {
+      console.error('--trigger-replan requires the form <atStage>:<targetStage>, e.g. --trigger-replan=testing:design');
+      process.exitCode = 1;
+      return;
+    }
+    triggerReplan = { atStage: atStage as StageId, targetStage: targetStage as StageId };
+  }
+
   const options: RunOptions = {
     autoApprove: flags.has('auto-approve'),
     agentMode,
     injectFailureAt: flags.get('inject-failure') as StageId | undefined,
     injectFailureSeverity: (flags.get('inject-failure-severity') as 'transient' | 'hard' | undefined) ?? 'transient',
+    triggerReplan,
     maxRetries: 2,
     maxReplans: 2,
   };
@@ -110,6 +123,9 @@ async function main() {
   }
   if (options.injectFailureAt) {
     console.log(`  (demonstration failure injected at "${options.injectFailureAt}", severity=${options.injectFailureSeverity})`);
+  }
+  if (triggerReplan) {
+    console.log(`  (demonstration re-plan: "${triggerReplan.atStage}" will flag "${triggerReplan.targetStage}" as invalidated)`);
   }
   console.log('');
 
