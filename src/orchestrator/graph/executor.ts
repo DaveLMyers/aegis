@@ -24,6 +24,24 @@ interface ReplanTriggerState {
   fired: boolean;
 }
 
+/**
+ * A human explicitly declining an approval gate (e.g. "n" at the
+ * release-readiness prompt) is a decision, not a transient failure --
+ * retrying just re-asks the same question, and falling back to a degraded
+ * playbook makes no sense for a checklist stage. Thrown instead of a plain
+ * Error so `withRetry`'s `isTerminal` check can short-circuit straight to a
+ * halt.
+ */
+class ApprovalRejectedError extends Error {
+  constructor(
+    public readonly result: StageExecutionResult,
+    reason: string,
+  ) {
+    super(reason);
+    this.name = 'ApprovalRejectedError';
+  }
+}
+
 /** Demonstration hook for `--trigger-replan`: fires once, on the stage's first natural attempt, and only if the agent didn't already flag an invalidation itself. */
 function applyReplanTrigger(
   node: StageNode,
@@ -178,6 +196,9 @@ async function runStage(
         autoApprove: options.autoApprove,
       });
       const result = applyReplanTrigger(node, attempt, rawResult, options, replanTriggerState);
+      if (node.requiresApproval && result.outputs.approved === false) {
+        throw new ApprovalRejectedError(result, `${node.id} rejected by human operator`);
+      }
       await checkGatesAndPolicy(result);
       finalResult = result;
       return result;
@@ -186,11 +207,16 @@ async function runStage(
       maxAttempts: options.maxRetries,
       backoffMs: 25,
       onAttempt: (n, err) => audit.record('retry', { attempt: n, error: String(err) }, node.id),
+      isTerminal: (err) => err instanceof ApprovalRejectedError,
     },
   );
 
   if (primary.ok) {
     return finalizeSuccess(node, ctx, audit, finalResult!, attempt, stageStartedAt);
+  }
+
+  if (primary.error instanceof ApprovalRejectedError) {
+    return finalizeRejection(node, ctx, audit, tracker, snapshotLabel, primary.error, attempt, stageStartedAt);
   }
 
   audit.record('fallback', { reason: String(primary.error) }, node.id);
@@ -251,11 +277,52 @@ function finalizeSuccess(
   audit.record('stage-pass', { attempt, outputs: Object.keys(result.outputs) }, node.id);
 
   if (node.requiresApproval) {
-    audit.record(result.outputs.approved ? 'approval-granted' : 'approval-requested', {}, node.id);
+    // Reaching here means the exit gate already passed, which for an
+    // approval-requiring stage means `approved` was true -- a rejection
+    // never gets this far (see ApprovalRejectedError / finalizeRejection).
+    audit.record('approval-granted', {}, node.id);
   }
 
   if (result.upstreamInvalidated) {
     return { status: 'passed', replan: result.upstreamInvalidated };
   }
   return { status: 'passed' };
+}
+
+/**
+ * A human explicitly rejected an approval gate -- halt immediately rather
+ * than retrying/falling back (which would just re-ask the same question).
+ * Still records a full StageRecord and restores any snapshot, but with
+ * status `halted` and the actual rejection rationale, not a generic
+ * "stage failed" -- this was a working decision, not a bug.
+ */
+function finalizeRejection(
+  node: StageNode,
+  ctx: ProjectContext,
+  audit: AuditLog,
+  tracker: ChangeTracker,
+  snapshotLabel: string,
+  error: ApprovalRejectedError,
+  attempt: number,
+  stageStartedAt: string,
+): StageOutcome {
+  audit.record('approval-rejected', { outputs: error.result.outputs }, node.id);
+  const reverted = tracker.rollback();
+  if (reverted.length > 0) {
+    audit.record('rollback', { snapshot: snapshotLabel }, node.id);
+  }
+  ctx.restore(snapshotLabel);
+  ctx.append({
+    stageId: node.id,
+    attempt,
+    startedAt: stageStartedAt,
+    endedAt: new Date().toISOString(),
+    status: 'halted',
+    inputs: {},
+    outputs: error.result.outputs,
+    rationale: error.result.rationale,
+    assumptions: error.result.assumptions ?? [],
+    filesChanged: error.result.filesChanged ?? [],
+  });
+  return { status: 'halted' };
 }

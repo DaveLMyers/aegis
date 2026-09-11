@@ -2,6 +2,8 @@ export interface RetryOptions {
   maxAttempts: number;
   backoffMs: number;
   onAttempt?: (attempt: number, error: unknown) => void;
+  /** When an error matches this, stop retrying immediately instead of spending the remaining attempts -- for errors that reflect a decision (e.g. a human explicitly rejecting something) rather than a transient failure retrying might recover from. */
+  isTerminal?: (error: unknown) => boolean;
 }
 
 export type RetryOutcome<T> =
@@ -16,6 +18,9 @@ export async function withRetry<T>(fn: () => Promise<T> | T, opts: RetryOptions)
       return { ok: true, value, attempts: attempt };
     } catch (error) {
       lastError = error;
+      if (opts.isTerminal?.(error)) {
+        return { ok: false, error, attempts: attempt };
+      }
       opts.onAttempt?.(attempt, error);
       if (attempt < opts.maxAttempts) {
         await sleep(opts.backoffMs * attempt);
