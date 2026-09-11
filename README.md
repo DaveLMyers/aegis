@@ -37,6 +37,12 @@ npm test
 Each `run` writes its full evidence -- decision lineage, audit trail,
 metrics, and a human-readable report -- to `scenarios/runs/<name>/`.
 
+**Windows/PowerShell:** `npm run <script> -- <args>` can silently drop
+flags in PowerShell specifically. If a run doesn't behave as flagged (e.g.
+`--auto-approve` doesn't suppress the approval prompt), invoke the script
+directly instead: `npx tsx src/orchestrator/cli.ts run greenfield --auto-approve`.
+See [docs/setup.md](docs/setup.md) for details.
+
 ## Docs
 
 - [docs/architecture.md](docs/architecture.md) -- components, control flow, key decisions
