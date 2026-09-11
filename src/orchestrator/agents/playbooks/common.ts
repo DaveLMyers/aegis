@@ -4,6 +4,12 @@ import type { ProjectContext } from '../../state/projectContext.js';
 import type { StageExecutionResult } from '../../types.js';
 import type { StageExecutionOptions } from '../agent.js';
 
+/** Strips ANSI color/formatting escape codes -- terminal output looks right in a terminal, but raw in a markdown file it's just garbage. */
+export function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
 /**
  * Shared across all three scenario types: actually runs the target-project
  * test suite via vitest and reports the real pass/fail outcome, rather than
@@ -23,9 +29,14 @@ export async function testingPlaybook(
     cwd: projectRoot,
     encoding: 'utf-8',
     shell: true,
+    // Belt-and-suspenders with stripAnsi() below: ask the subprocess not to
+    // colorize in the first place, rather than only cleaning up after it.
+    env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
   });
   const passed = result.status === 0 && !result.error;
-  const combined = `${result.error ? `spawn error: ${result.error.message}\n` : ''}${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
+  const combined = stripAnsi(
+    `${result.error ? `spawn error: ${result.error.message}\n` : ''}${result.stdout ?? ''}\n${result.stderr ?? ''}`,
+  ).trim();
   const summaryTail = combined.split('\n').slice(-15).join('\n') || (passed ? 'tests passed' : 'tests failed (no output captured)');
 
   return {
