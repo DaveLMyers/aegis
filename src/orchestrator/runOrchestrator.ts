@@ -40,9 +40,9 @@ export async function runScenario(
   let agent: Agent;
   if (options.agentMode === 'llm') {
     const { ClaudeAgent } = await import('./agents/claudeAgent.js');
-    agent = new ClaudeAgent(targetProjectRoot);
+    agent = new ClaudeAgent(targetProjectRoot, options.releaseVia);
   } else {
-    agent = new DeterministicAgent(targetProjectRoot);
+    agent = new DeterministicAgent(targetProjectRoot, options.releaseVia);
   }
 
   audit.record('run-start', {

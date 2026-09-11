@@ -23,7 +23,7 @@ below.
 requirements
      |
      v
-   design  --(tech-standards gate)-->
+   design  --(tech-standards: policy 'ask' escalation)-->
      |
      +----------------+
      v                v
@@ -91,17 +91,20 @@ degraded attempt) → **rollback** (revert every file that stage's
 Every transition is a distinct audit event. This is exercised, not just
 implemented -- see `--inject-failure` in [setup.md](./setup.md).
 
-## Policy guardrails, including the tech-standards gate
+## Policy guardrails, including tech-standards compliance
 
-Beyond change-control and release-control, `design`'s exit gate checks every
-proposed technology in its output against an approved-technology registry
-(`policy/techStandards.ts`). This was added mid-build in response to a real
-question: in an enterprise, an agentic engineering system shouldn't be free
-to pick arbitrary technology per requirement -- it should check against
-approved standards and only escalate to a human when a proposal deviates,
-reusing the same approval mechanism as `release-readiness`. All three demo
-scenarios use the one pre-approved stack, so this gate always passes cleanly
-in the captured runs; the mechanism is real and unit-tested
+Beyond change-control and release-control, `PolicyEngine` checks every
+`design`-stage proposal's technologies against an approved-technology
+registry (`policy/techStandards.ts`) -- as an `ask` escalation, not a hard
+gate: an off-standard proposal routes to the same human-approval mechanism
+`release-readiness` uses, with the design stage's own trade-off reasoning
+attached, rather than just failing the stage repeatedly. This was added
+mid-build in response to a real question: in an enterprise, an agentic
+engineering system shouldn't be free to pick arbitrary technology per
+requirement -- it should check against approved standards and only escalate
+to a human when a proposal deviates. All three demo scenarios use the one
+pre-approved stack, so this never fires in the captured runs; the mechanism
+is real and unit-tested
 (`tests/orchestrator/gate.test.ts`), just not visibly exercised by these
 particular scenarios.
 

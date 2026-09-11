@@ -27,6 +27,8 @@ export interface RunOptions {
   injectFailureSeverity?: 'transient' | 'hard';
   /** Demonstration hook: forces `atStage`'s first-attempt result to carry an `upstreamInvalidated` pointing at `targetStage`, so the re-planner fires in a real, captured scenario run instead of only in a unit test. */
   triggerReplan?: { atStage: StageId; targetStage: StageId };
+  /** "cli" (default): the existing interactive y/N prompt. "github-pr": the release-readiness approval is a real GitHub PR merge instead -- see agents/playbooks/githubApproval.ts. Ignored when autoApprove is true. */
+  releaseVia?: 'cli' | 'github-pr';
   maxRetries: number;
   maxReplans: number;
 }

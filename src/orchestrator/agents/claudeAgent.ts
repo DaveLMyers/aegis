@@ -5,6 +5,7 @@ import type { StageExecutionResult, StageId } from '../types.js';
 import type { Agent } from './agent.js';
 import { listProjectFiles } from './codebaseSnapshot.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
+import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
 import { APPROVED_TECH_STACK } from '../policy/techStandards.js';
 
 const MODEL = 'claude-sonnet-5';
@@ -30,7 +31,10 @@ export class ClaudeAgent implements Agent {
   readonly mode = 'llm' as const;
   private readonly client: Anthropic;
 
-  constructor(private readonly projectRoot: string) {
+  constructor(
+    private readonly projectRoot: string,
+    private readonly releaseVia: 'cli' | 'github-pr' = 'cli',
+  ) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       throw new Error('AGENT_MODE=llm requires ANTHROPIC_API_KEY to be set');
@@ -49,7 +53,11 @@ export class ClaudeAgent implements Agent {
     // gates theater; delegating to the shared playbooks (real vitest run,
     // real human-approval prompt) keeps them real under either agent mode.
     if (stageId === 'testing') return testingPlaybook(ctx, io, this.projectRoot);
-    if (stageId === 'release-readiness') return releaseReadinessPlaybook(ctx, io, this.projectRoot);
+    if (stageId === 'release-readiness') {
+      return this.releaseVia === 'github-pr' && !io.autoApprove
+        ? githubReleaseReadinessPlaybook(ctx, io, this.projectRoot)
+        : releaseReadinessPlaybook(ctx, io, this.projectRoot);
+    }
 
     if (io.simulateFailure) {
       throw new Error('simulated failure (llm agent, injected for resilience demonstration)');

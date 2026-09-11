@@ -107,12 +107,20 @@ async function main() {
     triggerReplan = { atStage: atStage as StageId, targetStage: targetStage as StageId };
   }
 
+  const releaseVia = flags.get('release-via');
+  if (releaseVia && releaseVia !== 'cli' && releaseVia !== 'github-pr') {
+    console.error('--release-via must be "cli" or "github-pr"');
+    process.exitCode = 1;
+    return;
+  }
+
   const options: RunOptions = {
     autoApprove: flags.has('auto-approve'),
     agentMode,
     injectFailureAt: flags.get('inject-failure') as StageId | undefined,
     injectFailureSeverity: (flags.get('inject-failure-severity') as 'transient' | 'hard' | undefined) ?? 'transient',
     triggerReplan,
+    releaseVia: releaseVia as 'cli' | 'github-pr' | undefined,
     maxRetries: 2,
     maxReplans: 2,
   };
@@ -126,6 +134,9 @@ async function main() {
   }
   if (triggerReplan) {
     console.log(`  (demonstration re-plan: "${triggerReplan.atStage}" will flag "${triggerReplan.targetStage}" as invalidated)`);
+  }
+  if (options.releaseVia === 'github-pr' && !options.autoApprove) {
+    console.log('  (release-readiness approval will be a real GitHub PR merge, not a CLI prompt)');
   }
   console.log('');
 
