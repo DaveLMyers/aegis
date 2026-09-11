@@ -1,0 +1,153 @@
+{
+  "runId": "brownfield-2026-09-11T18-59-52-113Z",
+  "scenario": {
+    "name": "brownfield",
+    "type": "brownfield",
+    "requirementText": "Add tiered rate limiting so premium partner clients get higher limits than standard clients."
+  },
+  "startedAt": "2026-09-11T18:59:52.115Z",
+  "records": [
+    {
+      "stageId": "requirements",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:52.116Z",
+      "endedAt": "2026-09-11T18:59:52.116Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "normalizedRequirement": "Add tiered rate limiting: links tagged as premium-tier get a higher per-minute request budget than standard-tier links.",
+        "scope": [
+          "schema: client_tier on links",
+          "POST /links accepts clientTier",
+          "tiered limiter on GET /:code"
+        ],
+        "assumptions": [
+          "\"Premium partner clients\" maps to a per-link client_tier attribute rather than a separate account/auth system, since none exists yet in this prototype.",
+          "\"Higher limits\" is interpreted as a materially larger request budget (10x), not unlimited."
+        ]
+      },
+      "rationale": "requirement text was \"Add tiered rate limiting so premium partner clients get higher limits than standard clients.\" -- well-defined enough to decompose directly, with two explicit assumptions recorded above rather than left implicit",
+      "assumptions": [
+        "\"Premium partner clients\" maps to a per-link client_tier attribute rather than a separate account/auth system, since none exists yet in this prototype.",
+        "\"Higher limits\" is interpreted as a materially larger request budget (10x), not unlimited."
+      ],
+      "filesChanged": []
+    },
+    {
+      "stageId": "design",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:52.117Z",
+      "endedAt": "2026-09-11T18:59:52.118Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "designDoc": "Codebase reasoning: read rateLimit.ts and confirmed it is a flat, per-IP limiter (no tiering), applied ahead of the links router in server.ts. Plan: add a client_tier column to links (schema change -- requires resetting the dev database), extend link creation to accept a clientTier, and replace the flat limiter with one that looks up each code's tier and applies a per-tier request budget.",
+        "impactedModules": [
+          "src/target-project/db.ts (schema)",
+          "src/target-project/routes.ts (link creation)",
+          "src/target-project/rateLimit.ts (limiter)",
+          "src/target-project/server.ts (wiring)"
+        ],
+        "technologies": [
+          "typescript",
+          "node.js",
+          "express",
+          "better-sqlite3"
+        ]
+      },
+      "rationale": "inspected the existing target-project modules on disk before proposing a change, rather than assuming their shape",
+      "assumptions": [],
+      "filesChanged": []
+    },
+    {
+      "stageId": "implementation",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:52.118Z",
+      "endedAt": "2026-09-11T18:59:52.121Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "filesChanged": [
+          "src/target-project/db.ts",
+          "src/target-project/routes.ts",
+          "src/target-project/rateLimit.ts",
+          "src/target-project/server.ts"
+        ]
+      },
+      "rationale": "patched the existing target-project modules per the design doc: schema, creation route, and limiter all updated together",
+      "assumptions": [],
+      "filesChanged": [
+        "src/target-project/db.ts",
+        "src/target-project/routes.ts",
+        "src/target-project/rateLimit.ts",
+        "src/target-project/server.ts"
+      ]
+    },
+    {
+      "stageId": "test-authoring",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:52.120Z",
+      "endedAt": "2026-09-11T18:59:52.121Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "testFilesChanged": [
+          "tests/target-project/tiered-rate-limit.test.ts"
+        ]
+      },
+      "rationale": "added regression tests for the new clientTier field alongside the pre-existing shortener test suite",
+      "assumptions": [],
+      "filesChanged": [
+        "tests/target-project/tiered-rate-limit.test.ts"
+      ]
+    },
+    {
+      "stageId": "testing",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:52.121Z",
+      "endedAt": "2026-09-11T18:59:55.233Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "testsPassed": true,
+        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/tiered-rate-limit.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 57\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 76\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m2 passed\u001b[39m\u001b[22m\u001b[90m (2)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:59:54\n\u001b[2m   Duration \u001b[22m 889ms\u001b[2m (transform 101ms, setup 0ms, collect 618ms, tests 133ms, environment 0ms, prepare 261ms)\u001b[22m"
+      },
+      "rationale": "ran the target-project test suite via vitest against the freshly implemented code; all tests passed",
+      "assumptions": [],
+      "filesChanged": []
+    },
+    {
+      "stageId": "documentation",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:55.233Z",
+      "endedAt": "2026-09-11T18:59:55.234Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "docsChanged": [
+          "docs/generated/brownfield.md"
+        ]
+      },
+      "rationale": "documented the codebase-reasoning finding, the change itself, and its backward-compatibility",
+      "assumptions": [],
+      "filesChanged": [
+        "docs/generated/brownfield.md"
+      ]
+    },
+    {
+      "stageId": "release-readiness",
+      "attempt": 1,
+      "startedAt": "2026-09-11T18:59:55.235Z",
+      "endedAt": "2026-09-11T18:59:55.235Z",
+      "status": "passed",
+      "inputs": {},
+      "outputs": {
+        "approved": true,
+        "releaseSummary": "Release checklist for \"brownfield\": tests PASSED."
+      },
+      "rationale": "auto-approved for a scripted/demo run (--auto-approve); a real rollout would require an interactive human sign-off at this gate",
+      "assumptions": [],
+      "filesChanged": []
+    }
+  ]
+}
