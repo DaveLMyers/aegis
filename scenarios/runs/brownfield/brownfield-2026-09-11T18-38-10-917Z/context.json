@@ -1,17 +1,17 @@
 {
-  "runId": "brownfield-2026-09-11T18-28-23-665Z",
+  "runId": "brownfield-2026-09-11T18-38-10-917Z",
   "scenario": {
     "name": "brownfield",
     "type": "brownfield",
     "requirementText": "Add tiered rate limiting so premium partner clients get higher limits than standard clients."
   },
-  "startedAt": "2026-09-11T18:28:23.667Z",
+  "startedAt": "2026-09-11T18:38:10.919Z",
   "records": [
     {
       "stageId": "requirements",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:23.668Z",
-      "endedAt": "2026-09-11T18:28:23.669Z",
+      "startedAt": "2026-09-11T18:38:10.920Z",
+      "endedAt": "2026-09-11T18:38:10.921Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -36,8 +36,8 @@
     {
       "stageId": "design",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:23.669Z",
-      "endedAt": "2026-09-11T18:28:23.670Z",
+      "startedAt": "2026-09-11T18:38:10.921Z",
+      "endedAt": "2026-09-11T18:38:10.922Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -62,8 +62,8 @@
     {
       "stageId": "implementation",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:23.671Z",
-      "endedAt": "2026-09-11T18:28:23.673Z",
+      "startedAt": "2026-09-11T18:38:10.922Z",
+      "endedAt": "2026-09-11T18:38:10.925Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -86,8 +86,8 @@
     {
       "stageId": "test-authoring",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:23.672Z",
-      "endedAt": "2026-09-11T18:28:23.673Z",
+      "startedAt": "2026-09-11T18:38:10.924Z",
+      "endedAt": "2026-09-11T18:38:10.925Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -104,13 +104,13 @@
     {
       "stageId": "testing",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:23.674Z",
-      "endedAt": "2026-09-11T18:28:26.918Z",
+      "startedAt": "2026-09-11T18:38:10.926Z",
+      "endedAt": "2026-09-11T18:38:13.964Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
         "testsPassed": true,
-        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/tiered-rate-limit.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 50\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 76\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m2 passed\u001b[39m\u001b[22m\u001b[90m (2)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:28:25\n\u001b[2m   Duration \u001b[22m 892ms\u001b[2m (transform 102ms, setup 0ms, collect 628ms, tests 126ms, environment 0ms, prepare 253ms)\u001b[22m"
+        "testSummary": "\u001b[1m\u001b[7m\u001b[36m RUN \u001b[39m\u001b[27m\u001b[22m \u001b[36mv2.1.9 \u001b[39m\u001b[90mE:/CodeProjects/repos/aegis\u001b[39m\n\n \u001b[32m✓\u001b[39m tests/target-project/tiered-rate-limit.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 51\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32m✓\u001b[39m tests/target-project/shortener.test.ts \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[90m 69\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m2 passed\u001b[39m\u001b[22m\u001b[90m (2)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m7 passed\u001b[39m\u001b[22m\u001b[90m (7)\u001b[39m\n\u001b[2m   Start at \u001b[22m 13:38:13\n\u001b[2m   Duration \u001b[22m 846ms\u001b[2m (transform 104ms, setup 0ms, collect 585ms, tests 120ms, environment 0ms, prepare 248ms)\u001b[22m"
       },
       "rationale": "ran the target-project test suite via vitest against the freshly implemented code; all tests passed",
       "assumptions": [],
@@ -119,8 +119,8 @@
     {
       "stageId": "documentation",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:26.919Z",
-      "endedAt": "2026-09-11T18:28:26.919Z",
+      "startedAt": "2026-09-11T18:38:13.964Z",
+      "endedAt": "2026-09-11T18:38:13.965Z",
       "status": "passed",
       "inputs": {},
       "outputs": {
@@ -137,8 +137,8 @@
     {
       "stageId": "release-readiness",
       "attempt": 1,
-      "startedAt": "2026-09-11T18:28:26.919Z",
-      "endedAt": "2026-09-11T18:28:26.920Z",
+      "startedAt": "2026-09-11T18:38:13.966Z",
+      "endedAt": "2026-09-11T18:38:13.966Z",
       "status": "passed",
       "inputs": {},
       "outputs": {

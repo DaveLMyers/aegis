@@ -87,4 +87,39 @@ describe('PolicyEngine', () => {
     );
     expect(result.decision).toBe('allow');
   });
+
+  it('allows a design proposing only approved technologies', () => {
+    const engine = new PolicyEngine();
+    const result = engine.check(
+      ctx({ stageId: 'design', result: { outputs: { technologies: ['typescript', 'express'] }, rationale: 'test' } }),
+    );
+    expect(result.decision).toBe('allow');
+  });
+
+  it('escalates an off-standard technology proposal to "ask", surfacing the design rationale', () => {
+    const engine = new PolicyEngine();
+    const result = engine.check(
+      ctx({
+        stageId: 'design',
+        result: {
+          outputs: { technologies: ['python', 'fastapi'] },
+          rationale: 'requirement needs native ML libraries approved stack cannot provide; chose Python/FastAPI over Node because of that',
+        },
+      }),
+    );
+    expect(result.decision).toBe('ask');
+    expect(result.violations[0].message).toContain('python');
+    expect(result.violations[0].message).toContain('native ML libraries');
+  });
+
+  it('allows an off-standard technology once explicitly human-approved', () => {
+    const engine = new PolicyEngine();
+    const result = engine.check(
+      ctx({
+        stageId: 'design',
+        result: { outputs: { technologies: ['python'], technologyApproved: true }, rationale: 'test' },
+      }),
+    );
+    expect(result.decision).toBe('allow');
+  });
 });

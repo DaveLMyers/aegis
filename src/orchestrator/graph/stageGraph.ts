@@ -1,12 +1,4 @@
-import {
-  alwaysOk,
-  requireOutputKeys,
-  requireOutputTrue,
-  requireStagesPassed,
-  allOf,
-  requireTechStandardsCompliance,
-} from '../gates/gate.js';
-import { checkTechStandards } from '../policy/techStandards.js';
+import { alwaysOk, requireOutputKeys, requireOutputTrue, requireStagesPassed, allOf } from '../gates/gate.js';
 import type { GateResult, ProjectContextLike, StageExecutionResult } from '../gates/gateTypes.js';
 import type { StageId } from '../types.js';
 
@@ -36,10 +28,11 @@ export const STAGE_GRAPH: StageNode[] = [
     id: 'design',
     dependsOn: ['requirements'],
     entryGate: requireStagesPassed(['requirements']),
-    exitGate: allOf(
-      requireOutputKeys(['designDoc', 'impactedModules', 'technologies']),
-      requireTechStandardsCompliance(checkTechStandards),
-    ),
+    // Tech-standards compliance is deliberately NOT a hard gate here -- it's
+    // a PolicyEngine 'ask' rule instead, so an off-list proposal escalates
+    // to a human approval prompt (with the design stage's own trade-off
+    // reasoning as context) rather than just failing the stage outright.
+    exitGate: requireOutputKeys(['designDoc', 'impactedModules', 'technologies']),
   },
   {
     id: 'implementation',

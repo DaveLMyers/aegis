@@ -5,12 +5,13 @@ import type { StageExecutionResult, StageId } from '../types.js';
 import type { Agent } from './agent.js';
 import { listProjectFiles } from './codebaseSnapshot.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
+import { APPROVED_TECH_STACK } from '../policy/techStandards.js';
 
 const MODEL = 'claude-sonnet-5';
 
 const STAGE_OUTPUT_CONTRACTS: Record<StageId, string> = {
   requirements: 'normalizedRequirement (string), assumptions (string[])',
-  design: 'designDoc (string), impactedModules (string[]), technologies (string[] -- name whatever is genuinely appropriate for this requirement; an unapproved choice is not an error, it will correctly route to a human approval gate)',
+  design: 'designDoc (string), impactedModules (string[]), technologies (string[])',
   implementation: 'filesChanged (string[], must match the paths given in "files")',
   'test-authoring': 'testFilesChanged (string[], must match the paths given in "files")',
   testing: 'testsPassed (boolean), testSummary (string)',
@@ -64,6 +65,22 @@ export class ClaudeAgent implements Agent {
         ? `Existing files in the target project (path only -- ask for a file's content in your rationale if you need to reason about it, but you cannot request it mid-turn, so use path names and directory structure to infer intent):\n${fileTree.map((f) => `- ${f}`).join('\n')}`
         : '(target project is currently empty -- this is a greenfield build)';
 
+    // Design is where technology gets chosen, so it's the one stage that
+    // gets the approved-standards list up front, plus explicit instructions
+    // for the case where the requirement doesn't fit it -- rather than
+    // discovering the deviation only after the policy engine rejects it.
+    const techStandardsBlock =
+      stageId === 'design'
+        ? `\nApproved technology standards (prefer these; a project already exists on this stack): ${APPROVED_TECH_STACK.join(', ')}.
+If the requirement can reasonably be met using only the approved list, use only those -- do not
+introduce a new technology just because it's a plausible choice in the abstract. If it genuinely
+cannot (the requirement needs a capability none of the approved list provides), propose 2-3
+concrete alternatives in your rationale, each with a one-sentence trade-off, explain specifically
+why the approved list falls short, and state which alternative you're choosing and why. This will
+be routed to a human for approval since it deviates from standards -- your rationale is what they
+will read to decide, so make the trade-off reasoning complete, not just a technology name.\n`
+        : '';
+
     const prompt = `You are the "${stageId}" stage of a governed SDLC orchestration engine. Do not assume any
 particular domain, language, or framework beyond what the requirement, prior lineage, and the
 existing file tree below actually imply.
@@ -74,7 +91,7 @@ Prior stage lineage:
 ${priorLineage || '(none yet)'}
 
 ${fileTreeBlock}
-
+${techStandardsBlock}
 Respond with ONLY a JSON object (no markdown fences) of the shape:
 {
   "rationale": string,

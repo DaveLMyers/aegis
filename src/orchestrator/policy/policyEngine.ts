@@ -1,4 +1,5 @@
 import { relative, resolve } from 'node:path';
+import { APPROVED_TECH_STACK, checkTechStandards } from './techStandards.js';
 import type { StageExecutionResult, StageId } from '../types.js';
 
 /**
@@ -68,6 +69,22 @@ export class PolicyEngine {
         message: 'release-control: cannot reach release-readiness without a passed testing stage',
         severity: 'block',
       });
+    }
+
+    // Tech-standards compliance is an 'ask', not a 'block': an off-list
+    // proposal isn't necessarily wrong, it's a deviation a human should
+    // actually decide on -- with the design stage's own rationale (which,
+    // for a genuine deviation, is expected to contain the trade-off
+    // comparison) surfaced as the context for that decision.
+    if (ctx.stageId === 'design') {
+      const technologies = (ctx.result.outputs.technologies as string[] | undefined) ?? [];
+      const check = checkTechStandards(technologies);
+      if (!check.compliant && ctx.result.outputs.technologyApproved !== true) {
+        violations.push({
+          message: `tech-standards: proposed technologies (${check.nonCompliant.join(', ')}) are not on the approved list (${APPROVED_TECH_STACK.join(', ')}) -- design rationale: ${ctx.result.rationale}`,
+          severity: 'ask',
+        });
+      }
     }
 
     // Scan both the stage's scalar outputs (design docs, rationale-adjacent

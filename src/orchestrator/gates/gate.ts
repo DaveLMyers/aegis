@@ -43,31 +43,6 @@ export function requireOutputTrue(key: string) {
   };
 }
 
-/**
- * Fails unless every technology the stage proposed is on the approved
- * standards registry, OR the stage explicitly recorded that a human already
- * signed off on the deviation (`outputs[approvedFlagKey] === true`).
- */
-export function requireTechStandardsCompliance(
-  checkFn: (technologies: string[]) => { compliant: boolean; nonCompliant: string[] },
-  approvedFlagKey = 'technologyApproved',
-) {
-  return (_ctx: ProjectContextLike, result: StageExecutionResult): GateResult => {
-    const technologies = (result.outputs.technologies as string[] | undefined) ?? [];
-    const check = checkFn(technologies);
-    if (check.compliant) {
-      return { ok: true, reason: 'all proposed technologies are on the approved standards list' };
-    }
-    if (result.outputs[approvedFlagKey] === true) {
-      return { ok: true, reason: `non-standard technologies (${check.nonCompliant.join(', ')}) were explicitly human-approved` };
-    }
-    return {
-      ok: false,
-      reason: `technology standards violation: ${check.nonCompliant.join(', ')} are not on the approved list and were not explicitly approved`,
-    };
-  };
-}
-
 export function allOf(...gates: Array<(ctx: ProjectContextLike, result: StageExecutionResult) => GateResult>) {
   return (ctx: ProjectContextLike, result: StageExecutionResult): GateResult => {
     for (const gate of gates) {

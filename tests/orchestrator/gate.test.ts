@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allOf, requireOutputKeys, requireOutputTrue, requireStagesPassed, requireTechStandardsCompliance } from '../../src/orchestrator/gates/gate.js';
-import { checkTechStandards } from '../../src/orchestrator/policy/techStandards.js';
+import { allOf, requireOutputKeys, requireOutputTrue, requireStagesPassed } from '../../src/orchestrator/gates/gate.js';
 import type { StageExecutionResult, StageRecord } from '../../src/orchestrator/types.js';
 
 function fakeResult(outputs: Record<string, unknown>): StageExecutionResult {
@@ -48,27 +47,6 @@ describe('requireStagesPassed', () => {
   it('passes once every upstream stage has passed', () => {
     const gate = requireStagesPassed(['requirements', 'design'] as any);
     expect(gate(makeCtx(new Set(['requirements', 'design'])) as any).ok).toBe(true);
-  });
-});
-
-describe('requireTechStandardsCompliance', () => {
-  it('passes when every technology is on the approved list', () => {
-    const gate = requireTechStandardsCompliance(checkTechStandards);
-    const result = gate({} as any, fakeResult({ technologies: ['typescript', 'express'] }));
-    expect(result.ok).toBe(true);
-  });
-
-  it('fails on an unapproved technology without an explicit approval flag', () => {
-    const gate = requireTechStandardsCompliance(checkTechStandards);
-    const result = gate({} as any, fakeResult({ technologies: ['mongodb'] }));
-    expect(result.ok).toBe(false);
-    expect(result.reason).toContain('mongodb');
-  });
-
-  it('passes an unapproved technology when explicitly human-approved', () => {
-    const gate = requireTechStandardsCompliance(checkTechStandards);
-    const result = gate({} as any, fakeResult({ technologies: ['mongodb'], technologyApproved: true }));
-    expect(result.ok).toBe(true);
   });
 });
 
