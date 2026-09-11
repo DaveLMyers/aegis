@@ -4,6 +4,7 @@ export type StageId =
   | 'implementation'
   | 'test-authoring'
   | 'testing'
+  | 'review'
   | 'documentation'
   | 'release-readiness';
 

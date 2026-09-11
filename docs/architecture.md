@@ -10,7 +10,7 @@ below.
 
 1. **The orchestration engine** (`src/orchestrator/`) — the actual subject of this
    assignment. Coordinates a requirement through requirements → design →
-   implementation/test-authoring (parallel) → testing → documentation →
+   implementation/test-authoring (parallel) → testing → review → documentation →
    release-readiness, with gates, retries, rollback, policy guardrails, an
    audit trail, and metrics.
 2. **The target project** (`src/target-project/`) — a URL-shortener REST
@@ -34,6 +34,9 @@ implementation   test-authoring     (parallel, share only the `design` dependenc
            testing   <-- synchronization point: waits on BOTH parallel branches
               |
               v
+           review    <-- independent of design/implementation's own reasoning
+              |
+              v
         documentation
               |
               v
@@ -45,6 +48,12 @@ each other, so the executor runs them concurrently; `testing` is the explicit
 join point that waits on both. This is the "non-linear execution with
 synchronization" requirement made concrete, not simulated.
 
+`review` depends only on `testing`, not on `design`/`implementation` directly
+-- and, more importantly, the agent behind it never reads those stages'
+rationale, only the actual file content produced. See
+[Independent review](#independent-review-not-just-multi-role) below for why
+that separation matters and what it does and doesn't buy.
+
 A stage can also trigger a **re-plan**: if its result includes
 `upstreamInvalidated: { stageId, reason }`, the executor invalidates that
 stage and everything downstream of it in `ProjectContext`, then re-enters
@@ -55,13 +64,14 @@ loops. See `src/orchestrator/graph/executor.ts` and `replanner.ts`.
 
 | Component | File | Responsibility |
 |---|---|---|
-| Stage graph | `graph/stageGraph.ts` | The 7 canonical stages, their dependencies, and each one's entry/exit gate |
+| Stage graph | `graph/stageGraph.ts` | The 8 canonical stages, their dependencies, and each one's entry/exit gate |
 | Executor | `graph/executor.ts` | Topological + parallel execution, retry/fallback/rollback/safe-stop orchestration, re-plan dispatch |
 | ProjectContext | `state/projectContext.ts` | The cross-stage decision lineage -- every stage's inputs, outputs, rationale, and assumptions, appended not overwritten |
 | Gates | `gates/gate.ts` | Composable entry/exit gate predicates (`requireOutputKeys`, `requireStagesPassed`, `requireTechStandardsCompliance`, ...) |
 | Agent interface | `agents/agent.ts` | The seam between "the engine" and "how a stage's work actually gets done" |
 | DeterministicAgent | `agents/deterministicAgent.ts` + `agents/playbooks/` | Default agent: dispatches to pre-authored, known-good playbooks per (scenario type, stage) |
 | ClaudeAgent | `agents/claudeAgent.ts` | Optional agent: makes a real Anthropic API call per stage (`AGENT_MODE=llm`) |
+| Independent review | `agents/playbooks/review.ts` | The `review` stage: reads only the actual changed-file content, never the implementer's own rationale -- see below |
 | Policy engine | `policy/policyEngine.ts`, `policy/techStandards.ts` | Guardrails checked on every stage transition: change-control (writes confined to allowed dirs), release-control (no release without passing tests), secret-pattern scanning, approved-technology compliance |
 | Resilience | `resilience/retry.ts`, `resilience/rollback.ts` | Bounded retry with backoff; filesystem change tracking + rollback |
 | Observability | `observability/auditLog.ts`, `observability/metrics.ts` | Append-only JSONL audit trail; success rate / retry-rollback frequency / MTTR / latency computed from that trail |
@@ -90,6 +100,43 @@ degraded attempt) → **rollback** (revert every file that stage's
 **safe-stop** (halt the run cleanly, non-zero exit, evidence preserved).
 Every transition is a distinct audit event. This is exercised, not just
 implemented -- see `--inject-failure` in [setup.md](./setup.md).
+
+## Independent review, not just multi-role
+
+AEGIS's agents are single-agent, multi-role: one model, invoked separately
+per stage with a distinct persona prompt each time (see "Reusability"
+below). That's a deliberate, defensible pattern -- but it has one real
+consequence worth naming: the same model that wrote `implementation` also
+wrote `test-authoring`, so if it had a blind spot, both the code and the
+tests checking that code can share it. Running the existing test suite
+again doesn't fix that; it's still the same reasoning checking itself.
+
+`review` exists specifically to break that chain. It depends only on
+`testing` having passed, and -- this is the actual mechanism, not just a
+naming choice -- its playbook (`agents/playbooks/review.ts`) never reads
+`design`'s or `implementation`'s `rationale`. It reads the same file *content*
+a human reviewer opening the diff would see, and nothing else. Under
+`AGENT_MODE=llm` this is a genuine second, independent model call
+(`ClaudeAgent.reviewStage()`), walled off from the first call's context on
+purpose. Under the deterministic agent it's necessarily a lightweight
+heuristic scan (empty files, leftover TODO/FIXME/XXX markers) -- the
+playbooks are pre-vetted templates, so there's nothing genuinely novel for a
+second pass to discover, but the mechanism is real and unit-tested either
+way (`tests/orchestrator/review.test.ts`).
+
+Findings are surfaced, not just gated: `release-readiness`'s summary
+includes the review outcome and any findings (`agents/playbooks/common.ts`),
+so whoever approves the release -- at the CLI or via a GitHub PR merge --
+sees them before deciding, not just a pass/fail.
+
+**What this is not:** true multi-agent debate, negotiation, or a
+specialized model per role. It's one deliberate architectural choice --
+isolate the review stage's context from the implementer's -- not a full
+multi-agent rearchitecture. That's a scope decision, stated explicitly here
+rather than left for a reviewer to wonder whether it was considered (see
+"Considered and deliberately deferred" in
+[final-engineering-summary.md](./final-engineering-summary.md) for the
+fuller reasoning on why the rest of multi-agent stayed out of scope).
 
 ## Policy guardrails, including tech-standards compliance
 
