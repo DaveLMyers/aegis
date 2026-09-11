@@ -1,0 +1,17 @@
+{"ts":"2026-09-11T17:07:51.723Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"run-start","details":{"scenario":"brownfield","type":"brownfield","agentMode":"deterministic","autoApprove":true,"injectFailureAt":null,"injectFailureSeverity":"transient"}}
+{"ts":"2026-09-11T17:07:51.724Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"requirements","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:51.725Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"requirements","details":{"attempt":1,"outputs":["normalizedRequirement","scope","assumptions"]}}
+{"ts":"2026-09-11T17:07:51.726Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"design","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:51.727Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"design","details":{"attempt":1,"outputs":["designDoc","impactedModules","technologies"]}}
+{"ts":"2026-09-11T17:07:51.727Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"implementation","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:51.729Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"test-authoring","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:51.730Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"implementation","details":{"attempt":1,"outputs":["filesChanged"]}}
+{"ts":"2026-09-11T17:07:51.730Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"test-authoring","details":{"attempt":1,"outputs":["testFilesChanged"]}}
+{"ts":"2026-09-11T17:07:51.730Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"testing","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:54.895Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"testing","details":{"attempt":1,"outputs":["testsPassed","testSummary"]}}
+{"ts":"2026-09-11T17:07:54.895Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"documentation","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:54.896Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"documentation","details":{"attempt":1,"outputs":["docsChanged"]}}
+{"ts":"2026-09-11T17:07:54.896Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-start","stageId":"release-readiness","details":{"attempt":1}}
+{"ts":"2026-09-11T17:07:54.896Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"stage-pass","stageId":"release-readiness","details":{"attempt":1,"outputs":["approved","releaseSummary"]}}
+{"ts":"2026-09-11T17:07:54.896Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"approval-granted","stageId":"release-readiness","details":{}}
+{"ts":"2026-09-11T17:07:54.897Z","runId":"brownfield-2026-09-11T17-07-51-722Z","type":"run-end","details":{"status":"completed","haltedStage":null}}

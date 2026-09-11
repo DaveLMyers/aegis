@@ -1,0 +1,91 @@
+import { relative, resolve } from 'node:path';
+import type { StageExecutionResult, StageId } from '../types.js';
+
+/**
+ * "block" fails the stage outright (same as a failed exit gate). "ask"
+ * escalates to the same human-approval mechanism as the release-readiness
+ * gate rather than failing automatically -- for checks (like a secret-scan
+ * hit) that can legitimately be a false positive a human should look at,
+ * not something that should always hard-fail a build.
+ */
+export type PolicySeverity = 'block' | 'ask';
+
+export interface PolicyViolation {
+  message: string;
+  severity: PolicySeverity;
+}
+
+export type PolicyDecision = 'allow' | 'ask' | 'block';
+
+export interface PolicyCheckResult {
+  decision: PolicyDecision;
+  violations: PolicyViolation[];
+}
+
+export interface PolicyContext {
+  stageId: StageId;
+  result: StageExecutionResult;
+  testingStageStatus: 'passed' | 'failed' | 'unknown';
+  projectRoot: string;
+  allowedWriteDirs: string[];
+}
+
+const SECRET_PATTERNS = [
+  /-----BEGIN (RSA |EC )?PRIVATE KEY-----/,
+  /api[_-]?key\s*[:=]\s*['"][a-z0-9]{16,}['"]/i,
+  /sk-ant-[a-z0-9-]{10,}/i,
+  /AKIA[0-9A-Z]{16}/,
+];
+
+/**
+ * Fixed guardrail rule set, checked before every stage transition is allowed
+ * to be recorded as passed. This is the "policy guardrails for security,
+ * compliance, and change control" requirement made concrete rather than
+ * asserted in prose.
+ */
+export class PolicyEngine {
+  check(ctx: PolicyContext): PolicyCheckResult {
+    const violations: PolicyViolation[] = [];
+
+    for (const file of ctx.result.filesChanged ?? []) {
+      const abs = resolve(ctx.projectRoot, file);
+      const insideAllowed = ctx.allowedWriteDirs.some((dir) => {
+        const rel = relative(resolve(ctx.projectRoot, dir), abs);
+        return rel !== '' && !rel.startsWith('..') && !rel.startsWith('/');
+      });
+      if (!insideAllowed) {
+        violations.push({
+          message: `change-control: "${file}" is outside allowed write directories (${ctx.allowedWriteDirs.join(', ')})`,
+          severity: 'block',
+        });
+      }
+    }
+
+    if (ctx.stageId === 'release-readiness' && ctx.testingStageStatus !== 'passed') {
+      violations.push({
+        message: 'release-control: cannot reach release-readiness without a passed testing stage',
+        severity: 'block',
+      });
+    }
+
+    const contentBlobs = Object.values(ctx.result.outputs).filter((v): v is string => typeof v === 'string');
+    for (const blob of contentBlobs) {
+      for (const pattern of SECRET_PATTERNS) {
+        if (pattern.test(blob)) {
+          violations.push({
+            message: `security: generated content matched a likely-secret pattern (${pattern}) -- could be a false positive, needs a human look`,
+            severity: 'ask',
+          });
+        }
+      }
+    }
+
+    const decision: PolicyDecision = violations.some((v) => v.severity === 'block')
+      ? 'block'
+      : violations.some((v) => v.severity === 'ask')
+        ? 'ask'
+        : 'allow';
+
+    return { decision, violations };
+  }
+}

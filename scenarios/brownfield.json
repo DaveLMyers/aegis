@@ -1,0 +1,5 @@
+{
+  "name": "brownfield",
+  "type": "brownfield",
+  "requirementText": "Add tiered rate limiting so premium partner clients get higher limits than standard clients."
+}

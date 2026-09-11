@@ -1,0 +1,5 @@
+{
+  "name": "greenfield",
+  "type": "greenfield",
+  "requirementText": "Build the core URL shortener: create a short link, redirect by code with click tracking, and expose per-code click analytics."
+}

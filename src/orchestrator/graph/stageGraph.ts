@@ -1,0 +1,87 @@
+import {
+  alwaysOk,
+  requireOutputKeys,
+  requireOutputTrue,
+  requireStagesPassed,
+  allOf,
+  requireTechStandardsCompliance,
+} from '../gates/gate.js';
+import { checkTechStandards } from '../policy/techStandards.js';
+import type { GateResult, ProjectContextLike, StageExecutionResult } from '../gates/gateTypes.js';
+import type { StageId } from '../types.js';
+
+export interface StageNode {
+  id: StageId;
+  dependsOn: StageId[];
+  parallelGroup?: string;
+  requiresApproval?: boolean;
+  entryGate: (ctx: ProjectContextLike) => GateResult;
+  exitGate: (ctx: ProjectContextLike, result: StageExecutionResult) => GateResult;
+}
+
+/**
+ * The canonical SDLC stage graph. `implementation` and `test-authoring` share
+ * the same upstream dependency (`design`) and no dependency on each other, so
+ * the executor runs them concurrently and `testing` is the synchronization
+ * point that waits on both -- the required sequential+parallel-with-sync shape.
+ */
+export const STAGE_GRAPH: StageNode[] = [
+  {
+    id: 'requirements',
+    dependsOn: [],
+    entryGate: alwaysOk,
+    exitGate: requireOutputKeys(['normalizedRequirement', 'assumptions']),
+  },
+  {
+    id: 'design',
+    dependsOn: ['requirements'],
+    entryGate: requireStagesPassed(['requirements']),
+    exitGate: allOf(
+      requireOutputKeys(['designDoc', 'impactedModules', 'technologies']),
+      requireTechStandardsCompliance(checkTechStandards),
+    ),
+  },
+  {
+    id: 'implementation',
+    dependsOn: ['design'],
+    parallelGroup: 'build',
+    entryGate: requireStagesPassed(['design']),
+    exitGate: requireOutputKeys(['filesChanged']),
+  },
+  {
+    id: 'test-authoring',
+    dependsOn: ['design'],
+    parallelGroup: 'build',
+    entryGate: requireStagesPassed(['design']),
+    exitGate: requireOutputKeys(['testFilesChanged']),
+  },
+  {
+    id: 'testing',
+    dependsOn: ['implementation', 'test-authoring'],
+    entryGate: requireStagesPassed(['implementation', 'test-authoring']),
+    exitGate: allOf(requireOutputKeys(['testsPassed', 'testSummary']), (_ctx, result) =>
+      result.outputs.testsPassed === true
+        ? { ok: true, reason: 'tests passed' }
+        : { ok: false, reason: `tests failed: ${String(result.outputs.testSummary ?? 'unknown')}` },
+    ),
+  },
+  {
+    id: 'documentation',
+    dependsOn: ['testing'],
+    entryGate: requireStagesPassed(['testing']),
+    exitGate: requireOutputKeys(['docsChanged']),
+  },
+  {
+    id: 'release-readiness',
+    dependsOn: ['documentation'],
+    requiresApproval: true,
+    entryGate: requireStagesPassed(['documentation']),
+    exitGate: allOf(requireOutputKeys(['approved']), requireOutputTrue('approved')),
+  },
+];
+
+export function downstreamOf(stageId: StageId): StageId[] {
+  const direct = STAGE_GRAPH.filter((n) => n.dependsOn.includes(stageId)).map((n) => n.id);
+  const transitive = direct.flatMap((id) => downstreamOf(id));
+  return Array.from(new Set([...direct, ...transitive]));
+}
