@@ -23,18 +23,23 @@
 ### `testing` (attempt 1, passed)
 - Rationale: ran the target-project test suite via vitest against the freshly implemented code; all tests passed
 
+### `review` (attempt 1, passed)
+- Rationale: independent review scanned 2 changed file(s) (heuristic scan: empty files, TODO/FIXME/XXX markers) with no findings
+- Findings: none
+
 ### `documentation` (attempt 1, passed)
 - Rationale: documented the full ambiguity-resolution trail alongside the resulting change, not just the change itself
 - Files changed: docs/generated/ambiguous.md
 
 ### `release-readiness` (attempt 1, passed)
 - Rationale: auto-approved for a scripted/demo run (--auto-approve); a real rollout would require an interactive human sign-off at this gate
+- Release summary: Release checklist for "ambiguous": tests PASSED; independent review PASSED.
 
 ## Reliability metrics
 - Success rate: 100%
-- Stages attempted: 7, passed: 7
+- Stages attempted: 8, passed: 8
 - Retries: 0
 - Rollbacks: 0
 - Replans: 0
 - MTTR: n/a (no failures recovered in this run)
-- Total latency: 3083ms
+- Total latency: 3205ms

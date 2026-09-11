@@ -1,0 +1,11 @@
+{
+  "runId": "brownfield-2026-09-11T19-06-22-695Z",
+  "totalStagesAttempted": 8,
+  "stagesPassed": 8,
+  "successRate": 1,
+  "retryCount": 0,
+  "rollbackCount": 0,
+  "replanCount": 0,
+  "mttrMs": null,
+  "totalLatencyMs": 3149
+}

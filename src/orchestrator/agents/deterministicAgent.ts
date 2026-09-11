@@ -6,6 +6,7 @@ import { brownfieldPlaybooks } from './playbooks/brownfield.js';
 import { ambiguousPlaybooks } from './playbooks/ambiguous.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
 import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
+import { deterministicReviewPlaybook } from './playbooks/review.js';
 
 type PlaybookFn = (ctx: ProjectContext, io: StageExecutionOptions, projectRoot: string) => Promise<StageExecutionResult> | StageExecutionResult;
 
@@ -41,6 +42,7 @@ const SCENARIO_PLAYBOOKS: Record<ScenarioType, Partial<Record<StageId, PlaybookF
 // Shared across every scenario type regardless of what's scenario-specific above.
 const SHARED_PLAYBOOKS: Partial<Record<StageId, PlaybookFn>> = {
   testing: testingPlaybook,
+  review: deterministicReviewPlaybook,
   'release-readiness': releaseReadinessPlaybook,
 };
 

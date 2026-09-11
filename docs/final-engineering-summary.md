@@ -237,19 +237,28 @@ to propose 2-3 concrete alternatives with trade-offs when the requirement
 genuinely doesn't fit the standard stack -- so the human approving the
 deviation has the actual reasoning to evaluate, not just a technology name.
 
-**Considered and deliberately deferred: a genuinely multi-agent
-architecture.** AEGIS today is single-agent, multi-role -- one model
-(Claude Sonnet 5, under `AGENT_MODE=llm`) invoked separately per stage with
-a distinct persona prompt each time, not multiple concurrently-specialized
-agents. That's a legitimate, common pattern (Anthropic's own AI-native SDLC
-playbook works the same way), but it does mean the same model that
-implements a change is the one whose test-authoring shares its blind
-spots -- no genuinely independent reviewer exists yet. Recognized as the
-natural next feature (an independent review stage between `testing` and
-`release-readiness`, with no access to the implementer's own reasoning
-trail) but deliberately not built into this already-large addition. Noted
-explicitly rather than left unmentioned, since a stated reason for a scope
-boundary is worth more than an accidental gap.
+**Closed: an independent review stage, added deliberately narrow.** AEGIS
+was, and still is, single-agent multi-role overall -- one model invoked
+separately per stage, not multiple concurrently-specialized agents. That
+remains a legitimate, common pattern (Anthropic's own AI-native SDLC
+playbook works the same way). But the specific consequence named here
+originally -- the same model that implements a change is the one whose
+test-authoring shares its blind spots, with no genuinely independent
+reviewer in the loop -- is now addressed: a `review` stage sits between
+`testing` and `documentation`, whose playbook never reads `design`'s or
+`implementation`'s rationale, only the actual file content produced (real
+second model call under `AGENT_MODE=llm`; a heuristic scan under the
+deterministic agent, since pre-vetted templates leave nothing novel to
+discover). Findings surface in the `release-readiness` summary a human
+sees, at the CLI or via a GitHub PR. See "Independent review" in
+`docs/architecture.md`.
+
+**Still deliberately out of scope: everything else "multi-agent" could
+mean** -- concurrent specialized agents, model-vs-model debate, a different
+model per role. One isolated-context review stage is a targeted fix for a
+specific, named blind spot, not a rearchitecture, and it's worth being
+precise about that distinction rather than letting "added a reviewer" imply
+more than it does.
 
 ## Limitations
 

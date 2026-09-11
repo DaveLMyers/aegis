@@ -32,6 +32,13 @@ Each run prints a status line and writes its full evidence to
 Drop `--auto-approve` to be prompted interactively at the `release-readiness`
 human-approval gate instead.
 
+Every run also goes through an independent `review` stage between `testing`
+and `documentation` -- deliberately isolated from `design`/`implementation`'s
+own reasoning, reading only the actual file content produced. Its findings
+(if any) are visible in `report.md` and folded into `release-readiness`'s
+summary, so whoever approves the release sees them. See "Independent
+review" in [architecture.md](./architecture.md).
+
 ## Run the target-project API directly
 
 ```bash

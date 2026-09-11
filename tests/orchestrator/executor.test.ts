@@ -22,6 +22,8 @@ function defaultOutputsFor(stageId: StageId, io: StageExecutionOptions): StageEx
       return { outputs: { testFilesChanged: [] }, rationale: 'ok', filesChanged: [] };
     case 'testing':
       return { outputs: { testsPassed: true, testSummary: 'ok' }, rationale: 'ok' };
+    case 'review':
+      return { outputs: { reviewFindings: [], reviewPassed: true }, rationale: 'ok' };
     case 'documentation':
       return { outputs: { docsChanged: [] }, rationale: 'ok', filesChanged: [] };
     case 'release-readiness':
@@ -56,13 +58,13 @@ describe('executeGraph', () => {
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it('completes all seven stages when everything succeeds', async () => {
+  it('completes all eight stages when everything succeeds', async () => {
     const ctx = new ProjectContext(scenario, 'run-1');
     const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-1');
     const result = await executeGraph(ctx, new FakeAgent(), baseOptions(), audit, new PolicyEngine(), projectRoot, []);
 
     expect(result.status).toBe('completed');
-    expect(ctx.records.filter((r) => r.status === 'passed')).toHaveLength(7);
+    expect(ctx.records.filter((r) => r.status === 'passed')).toHaveLength(8);
     expect(ctx.hasPassed('release-readiness')).toBe(true);
   });
 

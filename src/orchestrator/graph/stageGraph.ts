@@ -59,9 +59,19 @@ export const STAGE_GRAPH: StageNode[] = [
     ),
   },
   {
-    id: 'documentation',
+    id: 'review',
     dependsOn: ['testing'],
+    // Deliberately independent of `implementation`/`design` -- it depends
+    // only on `testing` having passed, and the playbook behind it never
+    // reads those stages' rationale, only the actual file content produced.
+    // See agents/playbooks/review.ts.
     entryGate: requireStagesPassed(['testing']),
+    exitGate: allOf(requireOutputKeys(['reviewFindings', 'reviewPassed']), requireOutputTrue('reviewPassed')),
+  },
+  {
+    id: 'documentation',
+    dependsOn: ['review'],
+    entryGate: requireStagesPassed(['review']),
     exitGate: requireOutputKeys(['docsChanged']),
   },
   {

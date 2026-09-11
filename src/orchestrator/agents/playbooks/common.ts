@@ -51,8 +51,12 @@ export async function releaseReadinessPlaybook(
     throw new Error('simulated failure: release checklist service unavailable');
   }
   const testingRecord = ctx.latest('testing');
+  const reviewRecord = ctx.latest('review');
+  const reviewFindings = (reviewRecord?.outputs.reviewFindings as string[] | undefined) ?? [];
   const summary = `Release checklist for "${ctx.scenario.name}": tests ${
     testingRecord?.status === 'passed' ? 'PASSED' : 'NOT PASSED'
+  }; independent review ${reviewRecord?.status === 'passed' ? 'PASSED' : 'NOT PASSED'}${
+    reviewFindings.length > 0 ? ` (${reviewFindings.length} finding(s): ${reviewFindings.join('; ')})` : ''
   }.`;
 
   let approved: boolean;

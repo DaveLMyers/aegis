@@ -6,6 +6,7 @@ import type { Agent } from './agent.js';
 import { listProjectFiles } from './codebaseSnapshot.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
 import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
+import { readChangedFiles } from './playbooks/review.js';
 import { APPROVED_TECH_STACK } from '../policy/techStandards.js';
 
 const MODEL = 'claude-sonnet-5';
@@ -16,6 +17,7 @@ const STAGE_OUTPUT_CONTRACTS: Record<StageId, string> = {
   implementation: 'filesChanged (string[], must match the paths given in "files")',
   'test-authoring': 'testFilesChanged (string[], must match the paths given in "files")',
   testing: 'testsPassed (boolean), testSummary (string)',
+  review: 'reviewFindings (string[]), reviewPassed (boolean)', // handled by reviewStage() directly, never reaches the generic prompt -- kept for type completeness
   documentation: 'docsChanged (string[], must match the paths given in "files")',
   'release-readiness': 'approved (boolean)',
 };
@@ -58,6 +60,10 @@ export class ClaudeAgent implements Agent {
         ? githubReleaseReadinessPlaybook(ctx, io, this.projectRoot)
         : releaseReadinessPlaybook(ctx, io, this.projectRoot);
     }
+    // `review` gets a real, separate LLM call -- unlike testing/release-readiness
+    // it's still genuinely generative (that's the point), just deliberately
+    // walled off from the implementer's own reasoning. See reviewStage() below.
+    if (stageId === 'review') return this.reviewStage(ctx, io);
 
     if (io.simulateFailure) {
       throw new Error('simulated failure (llm agent, injected for resilience demonstration)');
@@ -158,6 +164,77 @@ ${stageId}: ${STAGE_OUTPUT_CONTRACTS[stageId]}`;
       rationale: parsed.rationale ?? '(no rationale returned by the model)',
       assumptions: parsed.assumptions ?? [],
       filesChanged,
+    };
+  }
+
+  /**
+   * Deliberately independent review: this prompt gets the requirement and
+   * the actual file *content* the run produced, and nothing else -- no
+   * design rationale, no implementation reasoning, no prior stage lineage.
+   * The point is a second, genuinely separate pass that doesn't inherit
+   * whatever blind spot the implementer had, the same reason a human
+   * reviewer works from the diff, not the author's explanation of it.
+   */
+  private async reviewStage(ctx: ProjectContext, io: StageExecutionOptions): Promise<StageExecutionResult> {
+    if (io.simulateFailure) {
+      throw new Error('simulated failure (llm agent, injected for resilience demonstration)');
+    }
+
+    const files = readChangedFiles(ctx, this.projectRoot);
+    if (files.length === 0) {
+      return {
+        outputs: { reviewFindings: [], reviewPassed: true },
+        rationale: 'no files were changed this run; nothing to review',
+      };
+    }
+
+    const filesBlock = files.map((f) => `--- ${f.path} ---\n${f.content}`).join('\n\n');
+
+    const prompt = `You are an independent code reviewer. You were NOT involved in writing this code and have
+not seen any design notes or implementation reasoning -- deliberately, so your review isn't
+anchored to the author's own assumptions. Review it the way a human reviewer works from a diff,
+not an explanation of it.
+
+The original requirement (for context on intent only): ${ctx.scenario.requirementText}
+
+Files changed this run:
+
+${filesBlock}
+
+Look for real issues: bugs, missing edge cases, security problems, inputs that aren't validated,
+error handling gaps, anything that contradicts the stated requirement. Do not invent stylistic
+nitpicks to seem thorough -- an empty findings list is a legitimate, correct outcome if the code
+is actually fine.
+
+Respond with ONLY a JSON object (no markdown fences):
+{ "rationale": string, "reviewFindings": string[], "reviewPassed": boolean }
+
+"reviewFindings" lists concrete issues (empty array if none). "reviewPassed" should be false only
+for a genuine blocking problem (a real bug, a security issue, a requirement violation) -- minor
+suggestions belong in "reviewFindings" without failing the review.`;
+
+    const response = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const textBlock = response.content.find((block) => block.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('llm agent: no text content in review response');
+    }
+    const parsed = JSON.parse(textBlock.text) as {
+      rationale?: string;
+      reviewFindings?: string[];
+      reviewPassed?: boolean;
+    };
+
+    return {
+      outputs: {
+        reviewFindings: parsed.reviewFindings ?? [],
+        reviewPassed: parsed.reviewPassed ?? true,
+      },
+      rationale: parsed.rationale ?? '(no rationale returned by the model)',
     };
   }
 }

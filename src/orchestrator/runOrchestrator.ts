@@ -99,6 +99,13 @@ function renderReport(
     lines.push(`- Rationale: ${record.rationale}`);
     if (record.assumptions.length > 0) lines.push(`- Assumptions: ${record.assumptions.join('; ')}`);
     if (record.filesChanged.length > 0) lines.push(`- Files changed: ${record.filesChanged.join(', ')}`);
+    if (record.stageId === 'review') {
+      const findings = (record.outputs.reviewFindings as string[] | undefined) ?? [];
+      lines.push(`- Findings: ${findings.length === 0 ? 'none' : findings.join('; ')}`);
+    }
+    if (record.stageId === 'release-readiness' && typeof record.outputs.releaseSummary === 'string') {
+      lines.push(`- Release summary: ${record.outputs.releaseSummary}`);
+    }
     lines.push('');
   }
   lines.push('## Reliability metrics');
