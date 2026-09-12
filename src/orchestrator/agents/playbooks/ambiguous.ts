@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { ProjectContext } from '../../state/projectContext.js';
 import type { StageExecutionResult } from '../../types.js';
 import type { StageExecutionOptions } from '../agent.js';
-import { PREMIUM_ANALYTICS_TEST_TS, ROUTES_TIERED_ANALYTICS_TS } from './targetProjectTemplates.js';
+import { OPENAPI_YAML_TIERED_ANALYTICS, PREMIUM_ANALYTICS_TEST_TS, ROUTES_TIERED_ANALYTICS_TS } from './targetProjectTemplates.js';
 
 const CANDIDATE_INTERPRETATIONS = [
   'Higher rate limits for premium clients -- already delivered by the brownfield tiered-rate-limit change.',
@@ -105,10 +105,13 @@ ${ASSUMPTIONS.map((a) => `- ${a}`).join('\n')}
 \`GET /:code/stats\` now includes a \`referrerBreakdown\` array for premium-tier links only.
 `;
   io.tracker.writeFile(`docs/generated/${ctx.scenario.name}.md`, content);
+  io.tracker.writeFile('src/target-project/openapi.yaml', OPENAPI_YAML_TIERED_ANALYTICS);
+  const filesChanged = [`docs/generated/${ctx.scenario.name}.md`, 'src/target-project/openapi.yaml'];
   return {
-    outputs: { docsChanged: [`docs/generated/${ctx.scenario.name}.md`] },
-    filesChanged: [`docs/generated/${ctx.scenario.name}.md`],
-    rationale: 'documented the full ambiguity-resolution trail alongside the resulting change, not just the change itself',
+    outputs: { docsChanged: filesChanged },
+    filesChanged,
+    rationale:
+      'documented the full ambiguity-resolution trail alongside the resulting change, and updated the OpenAPI schema to show referrerBreakdown as present only for premium-tier responses',
   };
 }
 

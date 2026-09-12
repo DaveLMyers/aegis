@@ -5,6 +5,7 @@ import type { StageExecutionResult } from '../../types.js';
 import type { StageExecutionOptions } from '../agent.js';
 import {
   DB_TIERED_TS,
+  OPENAPI_YAML_TIERED,
   RATE_LIMIT_TIERED_TS,
   ROUTES_TIERED_TS,
   SERVER_TIERED_TS,
@@ -126,10 +127,13 @@ audit record for the exact finding).
 Existing standard-tier behavior is unchanged; premium is strictly additive.
 `;
   io.tracker.writeFile(`docs/generated/${ctx.scenario.name}.md`, content);
+  io.tracker.writeFile('src/target-project/openapi.yaml', OPENAPI_YAML_TIERED);
+  const filesChanged = [`docs/generated/${ctx.scenario.name}.md`, 'src/target-project/openapi.yaml'];
   return {
-    outputs: { docsChanged: [`docs/generated/${ctx.scenario.name}.md`] },
-    filesChanged: [`docs/generated/${ctx.scenario.name}.md`],
-    rationale: 'documented the codebase-reasoning finding, the change itself, and its backward-compatibility',
+    outputs: { docsChanged: filesChanged },
+    filesChanged,
+    rationale:
+      'documented the codebase-reasoning finding, the change itself, its backward-compatibility, and updated the OpenAPI schema to reflect clientTier on creation and stats',
   };
 }
 

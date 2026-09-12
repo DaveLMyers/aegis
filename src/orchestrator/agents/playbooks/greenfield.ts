@@ -6,6 +6,7 @@ import {
   CODEGEN_TS,
   DB_TS,
   INDEX_TS,
+  OPENAPI_YAML,
   RATE_LIMIT_TS,
   ROUTES_TS,
   SERVER_TS,
@@ -111,10 +112,13 @@ Click analytics are recorded asynchronously via an in-process event bus rather
 than inline in the redirect handler, to keep the redirect path fast.
 `;
   io.tracker.writeFile(`docs/generated/${ctx.scenario.name}.md`, content);
+  io.tracker.writeFile('src/target-project/openapi.yaml', OPENAPI_YAML);
+  const filesChanged = [`docs/generated/${ctx.scenario.name}.md`, 'src/target-project/openapi.yaml'];
   return {
-    outputs: { docsChanged: [`docs/generated/${ctx.scenario.name}.md`] },
-    filesChanged: [`docs/generated/${ctx.scenario.name}.md`],
-    rationale: 'generated API documentation from the design doc and the implemented routes',
+    outputs: { docsChanged: filesChanged },
+    filesChanged,
+    rationale:
+      'generated API documentation and a real OpenAPI 3.0 schema from the design doc and the implemented routes',
   };
 }
 
