@@ -1,5 +1,6 @@
 export type StageId =
   | 'requirements'
+  | 'decomposition'
   | 'design'
   | 'implementation'
   | 'test-authoring'
@@ -7,6 +8,20 @@ export type StageId =
   | 'review'
   | 'documentation'
   | 'release-readiness';
+
+/**
+ * A single unit of work derived from the normalized requirement -- distinct
+ * from a StageId, which is a fixed point in the SDLC *lifecycle* graph and
+ * identical across every scenario. A Task is the *work breakdown* for one
+ * specific requirement: real content, real dependencies, genuinely
+ * different from one requirement to the next.
+ */
+export interface Task {
+  id: string;
+  description: string;
+  dependsOn: string[];
+  acceptanceCriteria: string;
+}
 
 export type StageStatus = 'pending' | 'running' | 'passed' | 'failed' | 'halted' | 'skipped';
 

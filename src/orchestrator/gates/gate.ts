@@ -1,4 +1,5 @@
 import type { GateResult, ProjectContextLike, StageExecutionResult, StageId } from './gateTypes.js';
+import type { Task } from '../types.js';
 
 export const alwaysOk = (): GateResult => ({ ok: true, reason: 'no preconditions' });
 
@@ -40,6 +41,60 @@ export function requireOutputTrue(key: string) {
       return { ok: false, reason: `${key} is not true` };
     }
     return { ok: true, reason: `${key} is true` };
+  };
+}
+
+/**
+ * Real structural validation of a task graph, not just "does the key exist"
+ * -- this is what makes `decomposition` a genuine per-requirement work
+ * breakdown rather than a schema-shaped placeholder. Checks: at least one
+ * task, unique ids, every `dependsOn` reference resolves to a real task in
+ * the same list, and no dependency cycle (a topological sort must succeed).
+ */
+export function requireValidTaskGraph() {
+  return (_ctx: ProjectContextLike, result: StageExecutionResult): GateResult => {
+    const tasks = result.outputs.tasks as Task[] | undefined;
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return { ok: false, reason: 'tasks must be a non-empty array' };
+    }
+
+    const ids = new Set<string>();
+    for (const task of tasks) {
+      if (ids.has(task.id)) {
+        return { ok: false, reason: `duplicate task id "${task.id}"` };
+      }
+      ids.add(task.id);
+    }
+
+    for (const task of tasks) {
+      for (const dep of task.dependsOn) {
+        if (!ids.has(dep)) {
+          return { ok: false, reason: `task "${task.id}" depends on unknown task "${dep}"` };
+        }
+      }
+    }
+
+    // Kahn's algorithm: if every task can eventually be removed by repeatedly
+    // taking one whose dependencies are all already satisfied, there is no
+    // cycle. If tasks remain stuck at the end, the leftover ids ARE the cycle.
+    const remaining = new Map(tasks.map((t) => [t.id, new Set(t.dependsOn)]));
+    const resolved = new Set<string>();
+    let progressed = true;
+    while (progressed && remaining.size > 0) {
+      progressed = false;
+      for (const [id, deps] of [...remaining.entries()]) {
+        if ([...deps].every((d) => resolved.has(d))) {
+          resolved.add(id);
+          remaining.delete(id);
+          progressed = true;
+        }
+      }
+    }
+    if (remaining.size > 0) {
+      return { ok: false, reason: `dependency cycle detected among task(s): ${[...remaining.keys()].join(', ')}` };
+    }
+
+    return { ok: true, reason: `${tasks.length} task(s), a valid dependency graph` };
   };
 }
 

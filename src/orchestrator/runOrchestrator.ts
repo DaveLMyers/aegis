@@ -7,7 +7,7 @@ import { computeMetrics, type RunMetrics } from './observability/metrics.js';
 import { executeGraph, type RunResult } from './graph/executor.js';
 import { DeterministicAgent } from './agents/deterministicAgent.js';
 import type { Agent } from './agents/agent.js';
-import type { AuditEvent, RunOptions, ScenarioDefinition } from './types.js';
+import type { AuditEvent, RunOptions, ScenarioDefinition, Task } from './types.js';
 
 export interface RunSummary {
   runId: string;
@@ -99,6 +99,15 @@ function renderReport(
     lines.push(`- Rationale: ${record.rationale}`);
     if (record.assumptions.length > 0) lines.push(`- Assumptions: ${record.assumptions.join('; ')}`);
     if (record.filesChanged.length > 0) lines.push(`- Files changed: ${record.filesChanged.join(', ')}`);
+    if (record.stageId === 'decomposition') {
+      const tasks = (record.outputs.tasks as Task[] | undefined) ?? [];
+      lines.push(`- Task graph (${tasks.length} task(s)):`);
+      for (const task of tasks) {
+        lines.push(
+          `  - \`${task.id}\`: ${task.description}${task.dependsOn.length > 0 ? ` (depends on: ${task.dependsOn.join(', ')})` : ' (no dependencies)'} -- done when: ${task.acceptanceCriteria}`,
+        );
+      }
+    }
     if (record.stageId === 'review') {
       const findings = (record.outputs.reviewFindings as string[] | undefined) ?? [];
       lines.push(`- Findings: ${findings.length === 0 ? 'none' : findings.join('; ')}`);

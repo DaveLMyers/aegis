@@ -13,6 +13,7 @@ const MODEL = 'claude-sonnet-5';
 
 const STAGE_OUTPUT_CONTRACTS: Record<StageId, string> = {
   requirements: 'normalizedRequirement (string), assumptions (string[])',
+  decomposition: 'tasks (array of { id: string, description: string, dependsOn: string[], acceptanceCriteria: string }) -- a real work breakdown of the normalized requirement, not the SDLC lifecycle; every dependsOn id must reference another task in the same array, no cycles',
   design: 'designDoc (string), impactedModules (string[]), technologies (string[])',
   implementation: 'filesChanged (string[], must match the paths given in "files")',
   'test-authoring': 'testFilesChanged (string[], must match the paths given in "files")',

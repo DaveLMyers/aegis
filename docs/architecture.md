@@ -9,10 +9,10 @@ below.
 ## Two things this repo contains
 
 1. **The orchestration engine** (`src/orchestrator/`) — the actual subject of this
-   assignment. Coordinates a requirement through requirements → design →
-   implementation/test-authoring (parallel) → testing → review → documentation →
-   release-readiness, with gates, retries, rollback, policy guardrails, an
-   audit trail, and metrics.
+   assignment. Coordinates a requirement through requirements → decomposition →
+   design → implementation/test-authoring (parallel) → testing → review →
+   documentation → release-readiness, with gates, retries, rollback, policy
+   guardrails, an audit trail, and metrics.
 2. **The target project** (`src/target-project/`) — a URL-shortener REST
    service. It is the *fixture* the engine is demonstrated against, not the
    deliverable. It's intentionally kept lean.
@@ -21,6 +21,9 @@ below.
 
 ```
 requirements
+     |
+     v
+decomposition  <-- normalized requirement -> real task graph (Core Requirement 2)
      |
      v
    design  --(tech-standards: policy 'ask' escalation)-->
@@ -48,6 +51,21 @@ each other, so the executor runs them concurrently; `testing` is the explicit
 join point that waits on both. This is the "non-linear execution with
 synchronization" requirement made concrete, not simulated.
 
+`decomposition` is deliberately its own stage, not a field tucked inside
+`requirements`' output. It answers a different question than the stage graph
+you're looking at right now: this diagram is the fixed SDLC *lifecycle*,
+identical for every scenario -- `decomposition`'s job is to break the
+*requirement itself* into a real task graph (`Task { id, description,
+dependsOn, acceptanceCriteria }`), which genuinely differs from one
+requirement to the next. Its exit gate (`requireValidTaskGraph`,
+`gates/gate.ts`) does real structural validation, not just key-presence: at
+least one task, unique ids, every `dependsOn` reference resolves to a real
+task in the same list, and no dependency cycle (verified via a topological
+sort). See `agents/playbooks/decomposition.ts` -- each scenario type derives
+a different task list from what `requirements` actually produced (read via
+`ctx.latest('requirements')`), and the rendered task graph is visible
+directly in `report.md`, not buried in `context.json`.
+
 `review` depends only on `testing`, not on `design`/`implementation` directly
 -- and, more importantly, the agent behind it never reads those stages'
 rationale, only the actual file content produced. See
@@ -69,10 +87,11 @@ renders when this fires). See `src/orchestrator/graph/executor.ts` and
 
 | Component | File | Responsibility |
 |---|---|---|
-| Stage graph | `graph/stageGraph.ts` | The 8 canonical stages, their dependencies, and each one's entry/exit gate |
+| Stage graph | `graph/stageGraph.ts` | The 9 canonical stages, their dependencies, and each one's entry/exit gate |
 | Executor | `graph/executor.ts` | Topological + parallel execution, retry/fallback/rollback/safe-stop orchestration, re-plan dispatch |
 | ProjectContext | `state/projectContext.ts` | The cross-stage decision lineage -- every stage's outputs, rationale, and assumptions, appended not overwritten. `StageRecord.inputs` exists in the schema as a reserved field but is not yet populated at any write site (see Limitations) |
-| Gates | `gates/gate.ts` | Composable entry/exit gate predicates (`requireOutputKeys`, `requireStagesPassed`, `requireOutputTrue`, `allOf`, ...) |
+| Gates | `gates/gate.ts` | Composable entry/exit gate predicates (`requireOutputKeys`, `requireStagesPassed`, `requireOutputTrue`, `requireValidTaskGraph`, `allOf`, ...) |
+| Task decomposition | `agents/playbooks/decomposition.ts` | The `decomposition` stage: converts the normalized requirement into a real, per-requirement task graph -- distinct from the fixed stage-graph lifecycle above |
 | Agent interface | `agents/agent.ts` | The seam between "the engine" and "how a stage's work actually gets done" |
 | DeterministicAgent | `agents/deterministicAgent.ts` + `agents/playbooks/` | Default agent: dispatches to pre-authored, known-good playbooks per (scenario type, stage) |
 | ClaudeAgent | `agents/claudeAgent.ts` | Optional agent: makes a real Anthropic API call per stage (`AGENT_MODE=llm`) |

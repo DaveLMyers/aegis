@@ -15,6 +15,8 @@ function defaultOutputsFor(stageId: StageId, io: StageExecutionOptions): StageEx
   switch (stageId) {
     case 'requirements':
       return { outputs: { normalizedRequirement: 'x', assumptions: [] }, rationale: 'ok' };
+    case 'decomposition':
+      return { outputs: { tasks: [{ id: 't1', description: 'x', dependsOn: [], acceptanceCriteria: 'x' }] }, rationale: 'ok' };
     case 'design':
       return { outputs: { designDoc: 'x', impactedModules: [], technologies: ['typescript'] }, rationale: 'ok' };
     case 'implementation':
@@ -59,13 +61,13 @@ describe('executeGraph', () => {
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it('completes all eight stages when everything succeeds', async () => {
+  it('completes all nine stages when everything succeeds', async () => {
     const ctx = new ProjectContext(scenario, 'run-1');
     const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-1');
     const result = await executeGraph(ctx, new FakeAgent(), baseOptions(), audit, new PolicyEngine(), projectRoot, []);
 
     expect(result.status).toBe('completed');
-    expect(ctx.records.filter((r) => r.status === 'passed')).toHaveLength(8);
+    expect(ctx.records.filter((r) => r.status === 'passed')).toHaveLength(9);
     expect(ctx.hasPassed('release-readiness')).toBe(true);
   });
 
