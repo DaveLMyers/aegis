@@ -72,7 +72,7 @@ considered.
 | Area | Status | Detail |
 |---|---|---|
 | Correctness & testing | Built | 87 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
-| Resilience | Built, with a named scoping gap | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. **But** rollback is scoped to the failing stage's own `ChangeTracker`, not the whole parallel batch: a hard failure in `implementation` doesn't roll back `test-authoring`'s already-applied writes, since they're siblings with independent trackers. `npm run reset` clears the resulting inconsistency; see "Limitations" below. |
+| Resilience | Built, with a named scoping gap | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. **But** rollback is scoped to the failing stage's own `ChangeTracker`, not the whole parallel batch: a hard failure in `implementation` doesn't roll back `test-authoring`'s already-applied writes, since they're siblings with independent trackers. `npm run reset` clears the resulting inconsistency. Tracked as [issue #29](https://github.com/DaveLMyers/aegis/issues/29). |
 | Governance / audit | Built | Every gate decision, retry, rollback, and approval is logged to an append-only trail. Policy engine enforces change-control, release-control, tech-standards compliance, and a three-way allow/ask/block secret-scan escalation. |
 | API health/readiness | Built | `GET /health` checks live DB connectivity (not just process liveness) and is registered ahead of rate limiting so monitoring probes are never throttled. |
 | External API timeouts | Built | `ClaudeAgent`'s Anthropic client sets an explicit 30s timeout rather than relying on SDK defaults, bounding how long a hung LLM call can occupy a retry attempt. |
@@ -467,10 +467,12 @@ Verified live: `metrics.json` shows a real `mttrMs` value, not `null`. See
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic
   agent's fallback attempt currently re-applies the same primary template
   rather than a genuinely lower-fidelity alternative. The fallback *path* is
-  real and tested; the fallback *content* is a placeholder.
+  real and tested; the fallback *content* is a placeholder. Tracked as
+  [issue #2](https://github.com/DaveLMyers/aegis/issues/2).
 - **No persistence/versioning for playbooks or the tech-standards registry.**
   Both are in-code constants. A real rollout would need these externalized
-  and versioned so they can change without a code deploy.
+  and versioned so they can change without a code deploy. Tracked as
+  [issue #6](https://github.com/DaveLMyers/aegis/issues/6).
 - **Rate limiting and the event bus are in-process and single-instance.**
   Fine for a prototype; would need a shared store (Redis, etc.) to survive
   multiple API instances.
@@ -494,7 +496,20 @@ Verified live: `metrics.json` shows a real `mttrMs` value, not `null`. See
   incorrectly claimed. `npm run reset` clears it. A real fix would need the
   executor to track every `ChangeTracker` created within a given parallel
   batch and roll all of them back together when any one stage in that batch
-  ultimately fails -- not yet built.
+  ultimately fails -- not yet built. Tracked as
+  [issue #29](https://github.com/DaveLMyers/aegis/issues/29).
+- **No API/schema definitions anywhere.** Core Requirement 5 explicitly
+  asks for them; there is zero OpenAPI, Swagger, JSON-Schema, or zod in the
+  repo -- only SQL DDL (`db.ts`) and a prose API description in
+  `docs/generated/*.md`. A real, acknowledged gap, not an oversight left
+  for a reviewer to find silently. Tracked as
+  [issue #30](https://github.com/DaveLMyers/aegis/issues/30).
+- **`ClaudeAgent` has zero test coverage.** The one significant module
+  making a real, non-mocked external API call has no automated tests,
+  unlike everything else in `src/orchestrator/` -- plus a hardcoded model
+  id with no fallback and an unguarded `JSON.parse` on the model's
+  response. Tracked as
+  [issue #31](https://github.com/DaveLMyers/aegis/issues/31).
 
 ## Maintainability & complexity
 
@@ -561,7 +576,8 @@ agentic engineering workflows, rather than assuming they did.
   for this brief, not for ongoing production operation. Worth noting: the
   re-planner (re-entering an upstream stage on invalidation) is already the
   mechanism a Maintain stage would need to close that loop; it just isn't
-  wired to a post-deploy trigger here.
+  wired to a post-deploy trigger here. Tracked as
+  [issue #4](https://github.com/DaveLMyers/aegis/issues/4).
 - The playbook gates any agent/prompt/skill configuration change behind a
   regression eval suite (20-50 real tasks, growing by one per production
   incident). AEGIS doesn't frame it this way explicitly, but the three
