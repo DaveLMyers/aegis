@@ -4,6 +4,7 @@ import { ProjectContext } from './state/projectContext.js';
 import { AuditLog } from './observability/auditLog.js';
 import { PolicyEngine } from './policy/policyEngine.js';
 import { computeMetrics, type RunMetrics } from './observability/metrics.js';
+import { renderReportHtml } from './observability/htmlReport.js';
 import { executeGraph, type RunResult } from './graph/executor.js';
 import { DeterministicAgent } from './agents/deterministicAgent.js';
 import type { Agent } from './agents/agent.js';
@@ -64,6 +65,7 @@ export async function runScenario(
   writeFileSync(join(outputDir, 'context.json'), JSON.stringify(ctx.toJSON(), null, 2), 'utf-8');
   writeFileSync(join(outputDir, 'metrics.json'), JSON.stringify(metrics, null, 2), 'utf-8');
   writeFileSync(join(outputDir, 'report.md'), renderReport(scenario, result, ctx, metrics, audit.all()), 'utf-8');
+  writeFileSync(join(outputDir, 'report.html'), renderReportHtml(scenario, result, ctx, metrics, audit.all()), 'utf-8');
 
   return { runId, status: result.status, haltedStage: result.haltedStage, outputDir };
 }

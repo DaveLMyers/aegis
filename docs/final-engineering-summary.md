@@ -34,9 +34,11 @@ gitignored, not committed; see "Nothing is pre-baked" in
   tiered rate limiting, SQLite persistence.
 - **Three scenarios** (`scenarios/*.json`) -- greenfield, brownfield,
   ambiguous. Each run captures `context.json` (decision lineage),
-  `audit.log.jsonl`, `metrics.json`, and a human-readable `report.md`
-  locally under `scenarios/runs/` (not committed -- run it to see it).
-- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 82 tests
+  `audit.log.jsonl`, `metrics.json`, a human-readable `report.md`, and a
+  self-contained `report.html` dashboard (reliability metrics as
+  color-coded stat cards, no server or build step needed) locally under
+  `scenarios/runs/` (not committed -- run it to see it).
+- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 87 tests
   covering gates, retry, rollback, parallel synchronization, re-planning,
   policy enforcement, computed reliability metrics, and the shortener's API
   behavior.
@@ -69,7 +71,7 @@ considered.
 
 | Area | Status | Detail |
 |---|---|---|
-| Correctness & testing | Built | 82 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
+| Correctness & testing | Built | 87 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
 | Resilience | Built | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. |
 | Governance / audit | Built | Every gate decision, retry, rollback, and approval is logged to an append-only trail. Policy engine enforces change-control, release-control, tech-standards compliance, and a three-way allow/ask/block secret-scan escalation. |
 | API health/readiness | Built | `GET /health` checks live DB connectivity (not just process liveness) and is registered ahead of rate limiting so monitoring probes are never throttled. |

@@ -45,8 +45,9 @@ npm test
 ```
 
 Each `run` writes its full evidence -- decision lineage, audit trail,
-metrics, and a human-readable report -- to `scenarios/runs/<name>/` locally
-(gitignored, not committed -- see "Nothing is pre-baked" in
+metrics, and a human-readable report (`report.md` and a `report.html`
+dashboard you can just open in a browser) -- to `scenarios/runs/<name>/`
+locally (gitignored, not committed -- see "Nothing is pre-baked" in
 [docs/setup.md](docs/setup.md)).
 
 **Windows/PowerShell:** `npm run <script> -- <args>` can silently drop
