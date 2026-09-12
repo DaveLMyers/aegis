@@ -67,6 +67,11 @@ curl -i localhost:3000/abc1234           # 302 redirect + records a click
 curl localhost:3000/abc1234/stats        # click count, last-click time (+ referrer breakdown if premium tier)
 ```
 
+The full request/response contract for all three endpoints is a real
+OpenAPI 3.0 document at `src/target-project/openapi.yaml`, generated (and
+updated) by the `documentation` stage of whichever scenario you last ran --
+not a hand-written static file.
+
 ## Run the tests
 
 ```bash
