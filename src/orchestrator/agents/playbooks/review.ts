@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { ProjectContext } from '../../state/projectContext.js';
-import type { StageExecutionResult } from '../../types.js';
+import type { StageExecutionResult, UpstreamInvalidation } from '../../types.js';
 import type { StageExecutionOptions } from '../agent.js';
 import { collectChangedFiles } from './githubApproval.js';
 
@@ -13,6 +13,27 @@ export function readChangedFiles(ctx: ProjectContext, projectRoot: string): Arra
       return existsSync(abs) ? { path: p, content: readFileSync(abs, 'utf-8') } : null;
     })
     .filter((f): f is { path: string; content: string } => f !== null);
+}
+
+/**
+ * Turns a review finding into a real re-plan request rather than letting it
+ * cascade into the retry/fallback/rollback chain built for technical
+ * failures. Shared by both agent modes so the actual "what happens when
+ * review finds a real problem" decision lives in exactly one tested place.
+ *
+ * `reviewPassed: false` -- "a genuine blocking problem, not a style nit"
+ * (see the LLM review prompt in claudeAgent.ts) -- is what sends the run
+ * back to `implementation`, bounded by `maxReplans` in the executor: if the
+ * budget is exhausted and a finding still exists, the run proceeds anyway
+ * with the finding intact in this stage's record, surfaced to the human at
+ * `release-readiness` rather than silently discarded or endlessly retried.
+ */
+export function reviewFindingsToInvalidation(reviewPassed: boolean, findings: string[]): UpstreamInvalidation | undefined {
+  if (reviewPassed || findings.length === 0) return undefined;
+  return {
+    stageId: 'implementation',
+    reason: `independent review found ${findings.length} blocking issue(s), sending the run back to implementation: ${findings.join('; ')}`,
+  };
 }
 
 const SUSPECT_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
@@ -56,11 +77,12 @@ export function deterministicReviewPlaybook(
     }
   }
 
+  const reviewPassed = findings.length === 0;
   return {
-    outputs: { reviewFindings: findings, reviewPassed: findings.length === 0 },
-    rationale:
-      findings.length === 0
-        ? `independent review scanned ${files.length} changed file(s) (heuristic scan: empty files, TODO/FIXME/XXX markers) with no findings`
-        : `independent review scanned ${files.length} changed file(s) and found ${findings.length} issue(s): ${findings.join('; ')}`,
+    outputs: { reviewFindings: findings, reviewPassed },
+    rationale: reviewPassed
+      ? `independent review scanned ${files.length} changed file(s) (heuristic scan: empty files, TODO/FIXME/XXX markers) with no findings`
+      : `independent review scanned ${files.length} changed file(s) and found ${findings.length} issue(s): ${findings.join('; ')}`,
+    upstreamInvalidated: reviewFindingsToInvalidation(reviewPassed, findings),
   };
 }

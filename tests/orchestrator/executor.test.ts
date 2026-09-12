@@ -142,6 +142,55 @@ describe('executeGraph', () => {
     expect(ctx.records.filter((r) => r.stageId === 'design')).toHaveLength(2);
   });
 
+  it('a real review finding sends the run back to implementation, then completes once clean (not a retry/fallback/rollback cascade)', async () => {
+    let reviewCalls = 0;
+    const ctx = new ProjectContext(scenario, 'run-10');
+    const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-10');
+    const agent = new FakeAgent({
+      review: (io) => {
+        reviewCalls++;
+        if (reviewCalls === 1) {
+          return {
+            outputs: { reviewFindings: ['found a leftover TODO'], reviewPassed: false },
+            rationale: 'first pass found a blocking issue',
+            upstreamInvalidated: { stageId: 'implementation', reason: 'found a leftover TODO' },
+          };
+        }
+        return defaultOutputsFor('review', io);
+      },
+    });
+    const result = await executeGraph(ctx, agent, baseOptions(), audit, new PolicyEngine(), projectRoot, []);
+
+    expect(result.status).toBe('completed');
+    expect(reviewCalls).toBe(2);
+    expect(audit.all().filter((e) => e.type === 'replan')).toHaveLength(1);
+    expect(audit.all().filter((e) => e.type === 'rollback')).toHaveLength(0);
+    expect(ctx.records.filter((r) => r.stageId === 'implementation')).toHaveLength(2);
+    expect(ctx.latest('review')?.outputs.reviewPassed).toBe(true);
+    expect(ctx.hasPassed('release-readiness')).toBe(true);
+  });
+
+  it('proceeds anyway once the replan budget for a persistent review finding is exhausted, leaving the finding visible for the human at release-readiness', async () => {
+    const ctx = new ProjectContext(scenario, 'run-11');
+    const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-11');
+    const agent = new FakeAgent({
+      review: () => ({
+        outputs: { reviewFindings: ['a persistent issue the deterministic template never fixes'], reviewPassed: false },
+        rationale: 'keeps finding the same issue every attempt',
+        upstreamInvalidated: { stageId: 'implementation', reason: 'a persistent issue the deterministic template never fixes' },
+      }),
+    });
+    const options = baseOptions({ maxReplans: 1 });
+    const result = await executeGraph(ctx, agent, options, audit, new PolicyEngine(), projectRoot, []);
+
+    // Bounded, not infinite -- exactly one replan is allowed, then the run
+    // proceeds rather than looping forever or being destroyed by rollback.
+    expect(audit.all().filter((e) => e.type === 'replan')).toHaveLength(1);
+    expect(result.status).toBe('completed');
+    expect(ctx.latest('review')?.outputs.reviewPassed).toBe(false);
+    expect(ctx.hasPassed('release-readiness')).toBe(true);
+  });
+
   it('--trigger-replan forces a re-plan even when the agent itself never flags one', async () => {
     // Unlike the test above, this FakeAgent never sets upstreamInvalidated --
     // RunOptions.triggerReplan is what injects it, at the executor level,

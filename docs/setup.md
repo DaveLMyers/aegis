@@ -29,6 +29,7 @@ Each run prints a status line and writes its full evidence to
 - `audit.log.jsonl` -- append-only event log (every gate check, retry, rollback, approval)
 - `metrics.json` -- computed reliability metrics for that run
 - `report.md` -- a human-readable summary of both
+- `report.html` -- the same summary as a self-contained dashboard (no server, no build step -- just open it in a browser): reliability metrics as color-coded stat cards, the task graph as a real table, stage-by-stage lineage as cards. Open it directly, e.g. on Windows: `start scenarios/runs/greenfield/<run-id>/report.html`
 
 Drop `--auto-approve` to be prompted interactively at the `release-readiness`
 human-approval gate instead.

@@ -153,6 +153,27 @@ includes the review outcome and any findings (`agents/playbooks/common.ts`),
 so whoever approves the release -- at the CLI or via a GitHub PR merge --
 sees them before deciding, not just a pass/fail.
 
+**A real finding sends the run back to `implementation`, not into the
+resilience chain.** `review`'s exit gate is deliberately structural only
+(did the review mechanism itself run) -- `reviewPassed: false` is not
+treated as the *stage* failing, because it isn't a technical error; it's
+information about the *code*. Instead, the playbook returns
+`upstreamInvalidated` pointing at `implementation`
+(`reviewFindingsToInvalidation` in `agents/playbooks/review.ts`, shared by
+both agent modes so this decision lives in exactly one tested place), which
+is a genuine re-plan through the same mechanism `--trigger-replan`
+demonstrates -- `implementation` (and everything downstream of it) actually
+re-runs. This is bounded by `maxReplans`, same as any other re-plan: if the
+budget is exhausted and a finding still persists, the run proceeds anyway
+with the finding intact in `review`'s record, surfaced to the human at
+`release-readiness` rather than silently discarded or retried forever.
+Under `AGENT_MODE=llm`, a re-run `implementation` attempt already sees
+`review`'s prior rationale in its prompt's lineage context for free (prior
+stage records are included generically, not specially wired for this) --
+the deterministic agent's static templates have no way to act on feedback,
+so this path is real and organically triggered for the first time by this
+mechanism, but only meaningfully self-corrects under the LLM agent.
+
 **What this is not:** true multi-agent debate, negotiation, or a
 specialized model per role. It's one deliberate architectural choice --
 isolate the review stage's context from the implementer's -- not a full
