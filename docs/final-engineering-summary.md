@@ -436,6 +436,32 @@ built-in scenarios' generated code ever produces a finding in the first
 place), but worth naming rather than implying the deterministic agent can
 "fix" anything.
 
+## Closed since: MTTR is now demonstrable via a real, documented command
+
+The re-grade (run against the repo after the first round of fixes above)
+confirmed the MTTR fix was correct at the unit level but caught something
+the unit tests couldn't: **neither documented `--inject-failure` command
+actually produces a non-null MTTR in practice.** `severity=transient`
+recovers inside the default `maxRetries=2` primary attempts, so it never
+exhausts them and the `stage-fail` event this metric depends on never
+fires; `severity=hard` fails the fallback too, so the run halts before any
+`stage-pass` could follow. Both documented commands genuinely demonstrate
+the resilience *chain* firing -- retry, fallback, rollback, safe-stop are
+all real and auditable -- but neither happens to exercise the specific
+fail-then-recover shape MTTR measures.
+
+Fixed by exposing `--max-retries` as a CLI flag (previously a hardcoded
+constant). Setting it to `1` makes a `transient` injection exhaust the
+*primary* attempt immediately, so the *fallback* attempt is what recovers
+it -- a real `stage-fail` -&gt; `stage-pass` pair:
+
+```
+npm run dev -- run greenfield --auto-approve --inject-failure=design --inject-failure-severity=transient --max-retries=1
+```
+
+Verified live: `metrics.json` shows a real `mttrMs` value, not `null`. See
+"Demonstrating the resilience paths" in `docs/setup.md`.
+
 ## Limitations
 
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic
