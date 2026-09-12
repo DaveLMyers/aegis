@@ -72,7 +72,7 @@ considered.
 | Area | Status | Detail |
 |---|---|---|
 | Correctness & testing | Built | 87 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
-| Resilience | Built | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. |
+| Resilience | Built, with a named scoping gap | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. **But** rollback is scoped to the failing stage's own `ChangeTracker`, not the whole parallel batch: a hard failure in `implementation` doesn't roll back `test-authoring`'s already-applied writes, since they're siblings with independent trackers. `npm run reset` clears the resulting inconsistency; see "Limitations" below. |
 | Governance / audit | Built | Every gate decision, retry, rollback, and approval is logged to an append-only trail. Policy engine enforces change-control, release-control, tech-standards compliance, and a three-way allow/ask/block secret-scan escalation. |
 | API health/readiness | Built | `GET /health` checks live DB connectivity (not just process liveness) and is registered ahead of rate limiting so monitoring probes are never throttled. |
 | External API timeouts | Built | `ClaudeAgent`'s Anthropic client sets an explicit 30s timeout rather than relying on SDK defaults, bounding how long a hung LLM call can occupy a retry attempt. |
@@ -356,12 +356,12 @@ not being handed pre-baked results. See "Nothing is pre-baked" in
 [setup.md](./setup.md).
 
 **Also caught in the same pass, fixed the same way: the public README's
-paraphrase of Core Requirement 4** sat closer to the actual assignment
-PDF's own phrasing than it should have, for a document marked
-"Classification: Schwab Internal" on every page, in a now-public repo. No
-company name or secret was present, but the classification marking itself
-is the thing that matters at a bank -- reworded into clearly independent
-phrasing as cheap insurance, not because a real leak occurred.
+paraphrase of Core Requirement 4** sat closer to the source assignment
+document's own phrasing than it should have, for a document carrying an
+internal-only classification marking, in a now-public repo. No secret was
+present, but a classification marking is itself a real restriction worth
+respecting -- reworded into clearly independent phrasing as cheap
+insurance, not because a real leak occurred.
 
 ## Closed since: genuine per-requirement task decomposition
 
@@ -480,6 +480,21 @@ Verified live: `metrics.json` shows a real `mttrMs` value, not `null`. See
   visible by reading its `rationale` and its `dependsOn` entry in
   `stageGraph.ts`, not from a captured `inputs` snapshot in the lineage
   itself.
+- **Rollback is scoped to one stage, not a parallel batch.** `ChangeTracker`
+  is created per-stage in `executor.ts`, and rollback only ever reverts the
+  *failing* stage's own tracker. `implementation` and `test-authoring` are
+  parallel siblings (both depend only on `design`) with independent
+  trackers -- if `implementation` hard-fails and rolls back, `test-authoring`
+  (which typically finishes first and has no reason to know its sibling
+  failed) keeps its already-written test file in place, now pointing at
+  files that no longer exist. Confirmed directly: running the documented
+  `--inject-failure=implementation --inject-failure-severity=hard` demo
+  from a clean slate leaves `npm test` failing with a module-not-found
+  error afterward, not passing as an earlier version of `setup.md`
+  incorrectly claimed. `npm run reset` clears it. A real fix would need the
+  executor to track every `ChangeTracker` created within a given parallel
+  batch and roll all of them back together when any one stage in that batch
+  ultimately fails -- not yet built.
 
 ## Maintainability & complexity
 

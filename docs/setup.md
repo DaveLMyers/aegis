@@ -94,11 +94,24 @@ npm run dev -- run greenfield --auto-approve --inject-failure=testing --inject-f
 npm run dev -- run greenfield --auto-approve --inject-failure=implementation --inject-failure-severity=hard
 ```
 
-After a hard-failure run, `npm test` should still pass -- `target-project`
-is gitignored now (see "Nothing is pre-baked" above), so the way to confirm
-nothing was left half-applied isn't a git diff anymore, it's that rollback
-restored a fully consistent, working state (if it hadn't, the test suite
-would fail against a partially-reverted fixture).
+**Correction, found via a third-party review that actually ran this exact
+command from a clean slate rather than trusting the claim below:** an
+earlier version of this doc said `npm test` should still pass after a
+hard-failure run. That's false for `--inject-failure=implementation`
+specifically, and worth being precise about why. Rollback is scoped to the
+*failing stage's own* `ChangeTracker` -- it correctly reverts everything
+`implementation` itself wrote. But `test-authoring` is `implementation`'s
+parallel sibling (both depend only on `design`), and it typically finishes
+writing its test file *before* `implementation`'s failure is even detected.
+That test file imports from the `target-project` files `implementation`'s
+rollback then deletes -- so `npm test` fails with a module-not-found error,
+not because rollback is broken, but because rollback has no visibility into
+what a sibling in the same parallel batch already wrote. This is a real,
+named gap (not yet fixed) in "Known Gaps" of
+[final-engineering-summary.md](./final-engineering-summary.md). To actually
+verify rollback after a hard-failure run: run `npm run reset` afterward,
+which clears the inconsistent state left by any parallel-sibling writes,
+before re-running scenarios.
 
 **To see a real, non-null MTTR** (mean time to recovery), the two commands
 above don't actually produce one on their own -- `transient` recovers
