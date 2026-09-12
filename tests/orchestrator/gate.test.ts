@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { allOf, requireOutputKeys, requireOutputTrue, requireStagesPassed } from '../../src/orchestrator/gates/gate.js';
-import type { StageExecutionResult, StageRecord } from '../../src/orchestrator/types.js';
+import { allOf, requireOutputKeys, requireOutputTrue, requireStagesPassed, requireValidTaskGraph } from '../../src/orchestrator/gates/gate.js';
+import type { StageExecutionResult, StageRecord, Task } from '../../src/orchestrator/types.js';
+
+function task(overrides: Partial<Task> = {}): Task {
+  return { id: 't', description: 'x', dependsOn: [], acceptanceCriteria: 'x', ...overrides };
+}
 
 function fakeResult(outputs: Record<string, unknown>): StageExecutionResult {
   return { outputs, rationale: 'test' };
@@ -47,6 +51,46 @@ describe('requireStagesPassed', () => {
   it('passes once every upstream stage has passed', () => {
     const gate = requireStagesPassed(['requirements', 'design'] as any);
     expect(gate(makeCtx(new Set(['requirements', 'design'])) as any).ok).toBe(true);
+  });
+});
+
+describe('requireValidTaskGraph', () => {
+  const gate = requireValidTaskGraph();
+
+  it('fails when tasks is missing or empty', () => {
+    expect(gate({} as any, fakeResult({})).ok).toBe(false);
+    expect(gate({} as any, fakeResult({ tasks: [] })).ok).toBe(false);
+  });
+
+  it('fails on a duplicate task id', () => {
+    const result = gate({} as any, fakeResult({ tasks: [task({ id: 'a' }), task({ id: 'a' })] }));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('duplicate');
+  });
+
+  it('fails when a task depends on an id that does not exist', () => {
+    const result = gate({} as any, fakeResult({ tasks: [task({ id: 'a', dependsOn: ['ghost'] })] }));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('ghost');
+  });
+
+  it('fails on a dependency cycle', () => {
+    const result = gate({} as any, fakeResult({
+      tasks: [task({ id: 'a', dependsOn: ['b'] }), task({ id: 'b', dependsOn: ['a'] })],
+    }));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('cycle');
+  });
+
+  it('passes a real, valid dependency graph', () => {
+    const result = gate({} as any, fakeResult({
+      tasks: [
+        task({ id: 'schema', dependsOn: [] }),
+        task({ id: 'create', dependsOn: ['schema'] }),
+        task({ id: 'tests', dependsOn: ['schema', 'create'] }),
+      ],
+    }));
+    expect(result.ok).toBe(true);
   });
 });
 

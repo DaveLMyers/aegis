@@ -36,7 +36,7 @@ gitignored, not committed; see "Nothing is pre-baked" in
   ambiguous. Each run captures `context.json` (decision lineage),
   `audit.log.jsonl`, `metrics.json`, and a human-readable `report.md`
   locally under `scenarios/runs/` (not committed -- run it to see it).
-- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 68 tests
+- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 77 tests
   covering gates, retry, rollback, parallel synchronization, re-planning,
   policy enforcement, computed reliability metrics, and the shortener's API
   behavior.
@@ -69,7 +69,7 @@ considered.
 
 | Area | Status | Detail |
 |---|---|---|
-| Correctness & testing | Built | 68 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
+| Correctness & testing | Built | 77 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
 | Resilience | Built | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. |
 | Governance / audit | Built | Every gate decision, retry, rollback, and approval is logged to an append-only trail. Policy engine enforces change-control, release-control, tech-standards compliance, and a three-way allow/ask/block secret-scan escalation. |
 | API health/readiness | Built | `GET /health` checks live DB connectivity (not just process liveness) and is registered ahead of rate limiting so monitoring probes are never throttled. |
@@ -147,7 +147,7 @@ using one of those frameworks, and this brief evaluates a hand-built
 orchestration mechanism instead (see "hand-built, not LangGraph/Temporal"
 above), which neutralizes it. Once the language choice is decoupled from
 any particular AI framework, static typing became the deciding factor for
-a system built around records flowing through an 8-stage pipeline with an
+a system built around records flowing through a 9-stage pipeline with an
 audit trail and a policy engine: a typo'd field name silently returning
 `undefined` is a real, recurring bug class in a governance-heavy engine,
 not a hypothetical one -- it's the exact shape of two bugs actually caught
@@ -357,6 +357,40 @@ PDF's own phrasing than it should have, for a document marked
 company name or secret was present, but the classification marking itself
 is the thing that matters at a bank -- reworded into clearly independent
 phrasing as cheap insurance, not because a real leak occurred.
+
+## Closed since: genuine per-requirement task decomposition
+
+The independent grading review's single most important finding: `STAGE_GRAPH`
+is the fixed SDLC *lifecycle* -- the same 8 nodes in the same order for every
+scenario and every ad-hoc requirement -- and nowhere did the system actually
+break a *requirement* into a task graph with real dependencies. Core
+Requirement 2 asks explicitly for "actionable tasks with dependencies and
+sequencing," and "depth of decomposition" is a standalone evaluation
+criterion; conflating the lifecycle graph with a requirement's own work
+breakdown was a real gap, not a documentation nit, and the project's own
+issue #17 already conceded it existed before this review confirmed it.
+
+Closed with a new, ninth stage: `decomposition`, sitting between
+`requirements` and `design`. It converts the normalized requirement into a
+real `Task { id, description, dependsOn, acceptanceCriteria }` graph --
+genuinely different content per scenario, not a copy-pasted constant,
+because it's derived from what `requirements` actually produced for that
+specific run. Its exit gate (`requireValidTaskGraph`, `gates/gate.ts`) does
+real structural validation: at least one task, unique ids, every
+`dependsOn` reference resolves to a task that actually exists, and no
+dependency cycle (verified via a topological sort) -- not just "does the
+key exist," which was a separate, broader criticism the review made of
+several other gates. The task graph is rendered directly in `report.md`
+(not buried in `context.json`), addressing the same "doesn't reach the
+human deliverable" pattern the review flagged for the brownfield design
+stage's `impactedModules`.
+
+Under `AGENT_MODE=llm`, `decomposition` goes through the same generic
+per-stage prompt path as `requirements`/`design`/etc. (see
+`STAGE_OUTPUT_CONTRACTS` in `claudeAgent.ts`) -- no special-casing needed,
+since the seam was already generic.
+
+Closes #17.
 
 ## Limitations
 

@@ -4,6 +4,7 @@ import type { Agent, StageExecutionOptions } from './agent.js';
 import { greenfieldPlaybooks } from './playbooks/greenfield.js';
 import { brownfieldPlaybooks } from './playbooks/brownfield.js';
 import { ambiguousPlaybooks } from './playbooks/ambiguous.js';
+import { decompositionPlaybooks } from './playbooks/decomposition.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
 import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
 import { deterministicReviewPlaybook } from './playbooks/review.js';
@@ -13,6 +14,7 @@ type PlaybookFn = (ctx: ProjectContext, io: StageExecutionOptions, projectRoot: 
 const SCENARIO_PLAYBOOKS: Record<ScenarioType, Partial<Record<StageId, PlaybookFn>>> = {
   greenfield: {
     requirements: greenfieldPlaybooks.requirements,
+    decomposition: decompositionPlaybooks.greenfield,
     design: greenfieldPlaybooks.design,
     implementation: greenfieldPlaybooks.implementation,
     'test-authoring': greenfieldPlaybooks.testAuthoring,
@@ -20,6 +22,7 @@ const SCENARIO_PLAYBOOKS: Record<ScenarioType, Partial<Record<StageId, PlaybookF
   },
   brownfield: {
     requirements: brownfieldPlaybooks.requirements,
+    decomposition: decompositionPlaybooks.brownfield,
     design: brownfieldPlaybooks.design,
     implementation: brownfieldPlaybooks.implementation,
     'test-authoring': brownfieldPlaybooks.testAuthoring,
@@ -27,6 +30,7 @@ const SCENARIO_PLAYBOOKS: Record<ScenarioType, Partial<Record<StageId, PlaybookF
   },
   ambiguous: {
     requirements: ambiguousPlaybooks.requirements,
+    decomposition: decompositionPlaybooks.ambiguous,
     design: ambiguousPlaybooks.design,
     implementation: ambiguousPlaybooks.implementation,
     'test-authoring': ambiguousPlaybooks.testAuthoring,

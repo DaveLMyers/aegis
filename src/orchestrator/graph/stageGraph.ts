@@ -1,4 +1,4 @@
-import { alwaysOk, requireOutputKeys, requireOutputTrue, requireStagesPassed, allOf } from '../gates/gate.js';
+import { alwaysOk, requireOutputKeys, requireOutputTrue, requireStagesPassed, requireValidTaskGraph, allOf } from '../gates/gate.js';
 import type { GateResult, ProjectContextLike, StageExecutionResult } from '../gates/gateTypes.js';
 import type { StageId } from '../types.js';
 
@@ -25,9 +25,20 @@ export const STAGE_GRAPH: StageNode[] = [
     exitGate: requireOutputKeys(['normalizedRequirement', 'assumptions']),
   },
   {
-    id: 'design',
+    id: 'decomposition',
     dependsOn: ['requirements'],
+    // Distinct from the lifecycle graph these stages themselves form: this
+    // is where the normalized REQUIREMENT (not the SDLC lifecycle) gets
+    // broken into actionable tasks with real dependencies and sequencing --
+    // Core Requirement 2, made concrete rather than conflated with the
+    // fixed stage graph. See agents/playbooks/decomposition.ts.
     entryGate: requireStagesPassed(['requirements']),
+    exitGate: allOf(requireOutputKeys(['tasks']), requireValidTaskGraph()),
+  },
+  {
+    id: 'design',
+    dependsOn: ['decomposition'],
+    entryGate: requireStagesPassed(['decomposition']),
     // Tech-standards compliance is deliberately NOT a hard gate here -- it's
     // a PolicyEngine 'ask' rule instead, so an off-list proposal escalates
     // to a human approval prompt (with the design stage's own trade-off
