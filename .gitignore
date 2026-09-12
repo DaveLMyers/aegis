@@ -9,3 +9,15 @@ src/target-project/data/*.db
 src/target-project/data/*.db-journal
 src/target-project/data/*.db-wal
 src/target-project/data/*.db-shm
+
+# The target-project fixture and its tests are BUILD OUTPUT, not source --
+# the orchestrator materializes them at run time from playbook templates
+# (see src/orchestrator/agents/playbooks/). The brief asks for a runnable
+# prototype with setup instructions, not pre-baked results: `npm install`
+# then run the three scenarios (see docs/setup.md) to generate these fresh.
+# Committing them created two copies of the same code that could silently
+# drift, and committing timestamped run evidence caused real merge conflicts
+# earlier in this project's history -- not worth repeating either mistake.
+src/target-project/
+tests/target-project/
+scenarios/runs/

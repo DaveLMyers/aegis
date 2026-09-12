@@ -6,6 +6,7 @@ import { executeGraph } from '../../src/orchestrator/graph/executor.js';
 import { ProjectContext } from '../../src/orchestrator/state/projectContext.js';
 import { AuditLog } from '../../src/orchestrator/observability/auditLog.js';
 import { PolicyEngine } from '../../src/orchestrator/policy/policyEngine.js';
+import { computeMetrics } from '../../src/orchestrator/observability/metrics.js';
 import type { Agent, StageExecutionOptions } from '../../src/orchestrator/agents/agent.js';
 import type { RunOptions, ScenarioDefinition, StageExecutionResult, StageId } from '../../src/orchestrator/types.js';
 
@@ -186,6 +187,29 @@ describe('executeGraph', () => {
     expect(eventTypes).not.toContain('retry');
     expect(eventTypes).not.toContain('fallback');
     expect(eventTypes).not.toContain('stage-fail');
+  });
+
+  it('recovers via fallback and produces a real, non-null MTTR (regression: stage-fail must fire on primary exhaustion, not only on total failure)', async () => {
+    const ctx = new ProjectContext(scenario, 'run-9');
+    const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-9');
+    const agent = new FakeAgent({
+      design: (io) => {
+        if (!io.fallback) throw new Error('primary attempt fails, fallback recovers');
+        return defaultOutputsFor('design', io);
+      },
+    });
+    const options = baseOptions({ maxRetries: 1 });
+    const result = await executeGraph(ctx, agent, options, audit, new PolicyEngine(), projectRoot, []);
+
+    expect(result.status).toBe('completed');
+    expect(ctx.latest('design')?.status).toBe('passed');
+    const eventTypes = audit.all().map((e) => e.type);
+    expect(eventTypes).toContain('stage-fail');
+    expect(eventTypes).toContain('fallback');
+
+    const metrics = computeMetrics('run-9', audit.all());
+    expect(metrics.mttrMs).not.toBeNull();
+    expect(metrics.mttrMs).toBeGreaterThanOrEqual(0);
   });
 
   it('records rationale and assumptions for audit-grade decision lineage', async () => {

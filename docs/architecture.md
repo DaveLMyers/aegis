@@ -55,10 +55,15 @@ rationale, only the actual file content produced. See
 that separation matters and what it does and doesn't buy.
 
 A stage can also trigger a **re-plan**: if its result includes
-`upstreamInvalidated: { stageId, reason }`, the executor invalidates that
-stage and everything downstream of it in `ProjectContext`, then re-enters
-execution from there — bounded by `maxReplans` per stage to prevent infinite
-loops. See `src/orchestrator/graph/executor.ts` and `replanner.ts`.
+`upstreamInvalidated: { stageId, reason }`, the executor removes that stage
+and everything downstream of it from its own `completed` tracking set and
+re-enters execution from there — bounded by `maxReplans` per stage to
+prevent infinite loops. `ProjectContext` itself is untouched by this: its
+records are append-only everywhere, including here, so the pre-replan
+record for an invalidated stage is preserved alongside the post-replan one
+rather than deleted (see the "Re-planning events" section `report.md`
+renders when this fires). See `src/orchestrator/graph/executor.ts` and
+`replanner.ts`.
 
 ## Core components
 
@@ -66,8 +71,8 @@ loops. See `src/orchestrator/graph/executor.ts` and `replanner.ts`.
 |---|---|---|
 | Stage graph | `graph/stageGraph.ts` | The 8 canonical stages, their dependencies, and each one's entry/exit gate |
 | Executor | `graph/executor.ts` | Topological + parallel execution, retry/fallback/rollback/safe-stop orchestration, re-plan dispatch |
-| ProjectContext | `state/projectContext.ts` | The cross-stage decision lineage -- every stage's inputs, outputs, rationale, and assumptions, appended not overwritten |
-| Gates | `gates/gate.ts` | Composable entry/exit gate predicates (`requireOutputKeys`, `requireStagesPassed`, `requireTechStandardsCompliance`, ...) |
+| ProjectContext | `state/projectContext.ts` | The cross-stage decision lineage -- every stage's outputs, rationale, and assumptions, appended not overwritten. `StageRecord.inputs` exists in the schema as a reserved field but is not yet populated at any write site (see Limitations) |
+| Gates | `gates/gate.ts` | Composable entry/exit gate predicates (`requireOutputKeys`, `requireStagesPassed`, `requireOutputTrue`, `allOf`, ...) |
 | Agent interface | `agents/agent.ts` | The seam between "the engine" and "how a stage's work actually gets done" |
 | DeterministicAgent | `agents/deterministicAgent.ts` + `agents/playbooks/` | Default agent: dispatches to pre-authored, known-good playbooks per (scenario type, stage) |
 | ClaudeAgent | `agents/claudeAgent.ts` | Optional agent: makes a real Anthropic API call per stage (`AGENT_MODE=llm`) |
@@ -152,7 +157,7 @@ requirement -- it should check against approved standards and only escalate
 to a human when a proposal deviates. All three demo scenarios use the one
 pre-approved stack, so this never fires in the captured runs; the mechanism
 is real and unit-tested
-(`tests/orchestrator/gate.test.ts`), just not visibly exercised by these
+(`tests/orchestrator/policy.test.ts`), just not visibly exercised by these
 particular scenarios.
 
 ## Reusability: engine vs. agent vs. playbook vs. target

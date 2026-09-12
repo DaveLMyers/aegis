@@ -23,12 +23,16 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Test
-        run: npm test
-
-      - name: Run all three orchestrator scenarios (regression gate)
+      # target-project and its tests are gitignored build output (see
+      # docs/setup.md, "Nothing is pre-baked") -- they don't exist on a
+      # fresh checkout, so the three scenarios must run BEFORE `npm test`,
+      # not after, or the target-project test suite silently never executes.
+      - name: Run all three orchestrator scenarios (regression gate; also materializes the target-project fixture)
         run: |
           npm run reset
           npm run dev -- run greenfield --auto-approve
           npm run dev -- run brownfield --auto-approve
           npm run dev -- run ambiguous --auto-approve
+
+      - name: Test
+        run: npm test
