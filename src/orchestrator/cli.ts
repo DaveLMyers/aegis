@@ -50,7 +50,7 @@ async function main() {
     console.error(
       [
         'usage:',
-        '  aegis run <scenario-name> [--auto-approve] [--inject-failure=<stageId>] [--inject-failure-severity=transient|hard] [--trigger-replan=<atStage>:<targetStage>]',
+        '  aegis run <scenario-name> [--auto-approve] [--inject-failure=<stageId>] [--inject-failure-severity=transient|hard] [--max-retries=<n>] [--trigger-replan=<atStage>:<targetStage>]',
         '  aegis run --requirement="<text>" --name=<slug> [--auto-approve] [--target-repo=<path-or-url>]',
         '',
         'AGENT_MODE=llm (requires ANTHROPIC_API_KEY) uses the real Claude-backed agent instead of the',
@@ -114,6 +114,14 @@ async function main() {
     return;
   }
 
+  const maxRetriesArg = flags.get('max-retries');
+  const maxRetries = maxRetriesArg ? Number(maxRetriesArg) : 2;
+  if (maxRetriesArg && (!Number.isInteger(maxRetries) || maxRetries < 1)) {
+    console.error('--max-retries must be a positive integer');
+    process.exitCode = 1;
+    return;
+  }
+
   const options: RunOptions = {
     autoApprove: flags.has('auto-approve'),
     agentMode,
@@ -121,7 +129,7 @@ async function main() {
     injectFailureSeverity: (flags.get('inject-failure-severity') as 'transient' | 'hard' | undefined) ?? 'transient',
     triggerReplan,
     releaseVia: releaseVia as 'cli' | 'github-pr' | undefined,
-    maxRetries: 2,
+    maxRetries,
     maxReplans: 2,
   };
 
@@ -131,6 +139,9 @@ async function main() {
   }
   if (options.injectFailureAt) {
     console.log(`  (demonstration failure injected at "${options.injectFailureAt}", severity=${options.injectFailureSeverity})`);
+  }
+  if (maxRetriesArg) {
+    console.log(`  (maxRetries overridden to ${maxRetries})`);
   }
   if (triggerReplan) {
     console.log(`  (demonstration re-plan: "${triggerReplan.atStage}" will flag "${triggerReplan.targetStage}" as invalidated)`);

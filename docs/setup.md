@@ -94,9 +94,25 @@ npm run dev -- run greenfield --auto-approve --inject-failure=testing --inject-f
 npm run dev -- run greenfield --auto-approve --inject-failure=implementation --inject-failure-severity=hard
 ```
 
-After a hard-failure run, diff `src/target-project/` against git to confirm
-nothing was left half-applied -- rollback restores every file the failing
-stage's `ChangeTracker` had written.
+After a hard-failure run, `npm test` should still pass -- `target-project`
+is gitignored now (see "Nothing is pre-baked" above), so the way to confirm
+nothing was left half-applied isn't a git diff anymore, it's that rollback
+restored a fully consistent, working state (if it hadn't, the test suite
+would fail against a partially-reverted fixture).
+
+**To see a real, non-null MTTR** (mean time to recovery), the two commands
+above don't actually produce one on their own -- `transient` recovers
+inside the default retry budget before any recorded failure, and `hard`
+never recovers at all. `--max-retries` makes the failure exhaust the
+*primary* attempts specifically, so the *fallback* attempt is what recovers
+it -- a real fail-then-recover pair for the metric to measure:
+
+```bash
+npm run dev -- run greenfield --auto-approve --inject-failure=design --inject-failure-severity=transient --max-retries=1
+```
+
+Check `metrics.json` (or `report.html`) afterward -- `mttrMs` will be a real
+number, not `null`.
 
 ## Optional: real LLM-backed agent
 
