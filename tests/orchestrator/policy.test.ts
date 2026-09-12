@@ -19,7 +19,7 @@ describe('PolicyEngine', () => {
   it('allows a clean stage result', () => {
     const engine = new PolicyEngine();
     const result = engine.check(
-      ctx({ result: { outputs: {}, rationale: 'test', filesChanged: ['src/target-project/db.ts'] } }),
+      ctx({ writtenFiles: [{ path: '/project/src/target-project/db.ts', content: 'export const x = 1;' }] }),
     );
     expect(result.decision).toBe('allow');
   });
@@ -27,7 +27,21 @@ describe('PolicyEngine', () => {
   it('blocks a write outside the allowed directories (change-control)', () => {
     const engine = new PolicyEngine();
     const result = engine.check(
-      ctx({ result: { outputs: {}, rationale: 'test', filesChanged: ['../../etc/passwd'] } }),
+      ctx({ writtenFiles: [{ path: '/etc/passwd', content: 'root:x:0:0' }] }),
+    );
+    expect(result.decision).toBe('block');
+    expect(result.violations[0].message).toContain('change-control');
+  });
+
+  it('blocks a write outside allowed directories even when the agent omits it from filesChanged (regression: change-control must check what was actually written, not the agent\'s self-report)', () => {
+    const engine = new PolicyEngine();
+    const result = engine.check(
+      ctx({
+        // The agent's own report claims a clean, in-bounds write...
+        result: { outputs: {}, rationale: 'test', filesChanged: ['src/target-project/db.ts'] },
+        // ...but ChangeTracker shows it actually also wrote outside the sandbox.
+        writtenFiles: [{ path: '/etc/passwd', content: 'root:x:0:0' }],
+      }),
     );
     expect(result.decision).toBe('block');
     expect(result.violations[0].message).toContain('change-control');
@@ -53,11 +67,8 @@ describe('PolicyEngine', () => {
     const engine = new PolicyEngine();
     const result = engine.check(
       ctx({
-        result: {
-          outputs: { generated: 'const key = "AKIAABCDEFGHIJKLMNOP";' },
-          rationale: 'test',
-          filesChanged: ['../outside.ts'],
-        },
+        result: { outputs: { generated: 'const key = "AKIAABCDEFGHIJKLMNOP";' }, rationale: 'test' },
+        writtenFiles: [{ path: '/outside.ts', content: 'export const x = 1;' }],
       }),
     );
     expect(result.decision).toBe('block');

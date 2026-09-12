@@ -23,8 +23,9 @@ npm run dev -- run ambiguous --auto-approve
 ```
 
 Each run prints a status line and writes its full evidence to
-`scenarios/runs/<name>/<run-id>/`:
-- `context.json` -- the complete decision lineage (every stage's inputs, outputs, rationale, assumptions)
+`scenarios/runs/<name>/<run-id>/` -- **local only, not committed** (see
+"Nothing is pre-baked" below):
+- `context.json` -- the complete decision lineage (every stage's outputs, rationale, assumptions; a reserved `inputs` field exists in the schema but isn't populated yet -- see Limitations in final-engineering-summary.md)
 - `audit.log.jsonl` -- append-only event log (every gate check, retry, rollback, approval)
 - `metrics.json` -- computed reliability metrics for that run
 - `report.md` -- a human-readable summary of both
@@ -71,9 +72,13 @@ curl localhost:3000/abc1234/stats        # click count, last-click time (+ refer
 npm test
 ```
 
-Runs both the orchestrator's own unit/integration tests
-(`tests/orchestrator/`) and the target-project's API tests
-(`tests/target-project/`).
+Runs both the orchestrator's own unit/integration tests (`tests/orchestrator/`,
+require nothing to have been run first -- they exercise the engine through a
+`FakeAgent`, independent of the fixture) and the target-project's API tests
+(`tests/target-project/`, which only exist after at least the greenfield
+scenario has been run -- see "Nothing is pre-baked" below). On a fresh clone
+before running any scenario, `npm test` runs the orchestrator suite only;
+that's expected, not a failure.
 
 ## Demonstrating the resilience paths
 
@@ -167,10 +172,22 @@ poller detects it) and #12 (closed without merging, confirmed rejection +
 cleanup) -- both since closed/cleaned up, not part of this repo's history
 as ongoing state.
 
+## Nothing is pre-baked -- you run it
+
+`src/target-project/`, `tests/target-project/`, and `scenarios/runs/` are
+**gitignored, not committed**. The brief asks for a runnable prototype with
+setup instructions, not sample results shipped alongside the code -- so
+there is nothing to inspect until you actually run a scenario. This is a
+deliberate choice, not an oversight: committing generated output previously
+created two copies of the same code that could silently drift (the real
+source of truth is always `src/orchestrator/agents/playbooks/`), and
+committing timestamped run evidence was the direct cause of real merge
+conflicts earlier in this project's history.
+
 ## Resetting to a clean slate
 
 The target-project, its tests, and prior run evidence are all
-orchestrator-generated and safe to delete:
+orchestrator-generated, gitignored, and safe to delete at any time:
 
 ```bash
 npm run reset

@@ -219,6 +219,14 @@ async function runStage(
     return finalizeRejection(node, ctx, audit, tracker, snapshotLabel, primary.error, attempt, stageStartedAt);
   }
 
+  // Recorded here, once, the moment the primary attempts are exhausted --
+  // not only on total failure below -- so a stage that recovers via
+  // fallback still has a 'stage-fail' -> 'stage-pass' pair in the audit
+  // trail. Without this, MTTR (mean time to recovery) can never produce a
+  // value: the only other 'stage-fail' site is immediately followed by
+  // rollback+safe-stop, which ends the run before any 'stage-pass' for that
+  // stage could ever occur.
+  audit.record('stage-fail', { error: String(primary.error), phase: 'primary-exhausted' }, node.id);
   audit.record('fallback', { reason: String(primary.error) }, node.id);
   try {
     attempt++;
@@ -232,7 +240,6 @@ async function runStage(
     await checkGatesAndPolicy(result);
     return finalizeSuccess(node, ctx, audit, result, attempt, stageStartedAt);
   } catch (fallbackError) {
-    audit.record('stage-fail', { error: String(fallbackError) }, node.id);
     audit.record('rollback', { snapshot: snapshotLabel }, node.id);
     const reverted = tracker.rollback();
     ctx.restore(snapshotLabel);

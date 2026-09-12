@@ -11,18 +11,28 @@ the shortener is the *fixture*, not the point -- see
 [docs/architecture.md](docs/architecture.md#reusability-engine-vs-agent-vs-playbook)
 for exactly what's domain-agnostic here and what's specific to this demo.
 
-## The brief this answers
+## What this demonstrates
 
-Build a prototype that shows an agentic execution model actually running a
-software engineering lifecycle end-to-end, with controlled autonomy rather
-than an unsupervised agent or a simple linear task chain: an explicit
-dependency graph with entry/exit gates, sequential and parallel paths with
-synchronization, cross-stage decision lineage, human approval at high-impact
-points, bounded retries/fallback/rollback/safe-stop, policy guardrails,
-reliability metrics (success rate, retry/rollback frequency, MTTR, latency),
-and dynamic re-planning when an assumption upstream turns out to be wrong --
-demonstrated across a greenfield build, a brownfield change, and a
-deliberately ambiguous requirement.
+Rather than one AI call that outputs code, a requirement here moves through
+an actual governed pipeline. The stages form a real graph, not a hardcoded
+script -- work can branch into concurrent paths and rejoin at a
+synchronization point, and every stage's reasoning is carried forward
+rather than discarded once the next one starts. A person, not the AI, has
+to say yes before anything reaches release, and a "no" is respected
+immediately rather than retried. When a step fails, the system doesn't just
+error out: it retries, falls back to a simpler approach, and if that still
+doesn't work, reverts every file it touched and stops cleanly instead of
+leaving something half-built. Guardrails run automatically at each handoff
+-- confining where code can be written, requiring tests to pass before
+release, flagging anything that looks like a leaked credential -- every one
+of those decisions is logged, and reliability numbers (success rate,
+retry/rollback frequency, recovery time, total latency) are computed from
+that log, not reported by hand. If something built earlier turns out to be
+wrong once a later stage runs, the pipeline can jump back and redo the
+affected work instead of continuing on a bad assumption. All of it is
+exercised across three different kinds of requirement: building something
+new, changing something that already exists, and one left deliberately
+vague until the system itself has to work out what's actually being asked.
 
 ## Quick start
 
@@ -35,7 +45,9 @@ npm test
 ```
 
 Each `run` writes its full evidence -- decision lineage, audit trail,
-metrics, and a human-readable report -- to `scenarios/runs/<name>/`.
+metrics, and a human-readable report -- to `scenarios/runs/<name>/` locally
+(gitignored, not committed -- see "Nothing is pre-baked" in
+[docs/setup.md](docs/setup.md)).
 
 **Windows/PowerShell:** `npm run <script> -- <args>` can silently drop
 flags in PowerShell specifically. If a run doesn't behave as flagged (e.g.

@@ -1,3 +1,4 @@
+import { STAGE_GRAPH } from '../graph/stageGraph.js';
 import type { AuditEvent } from '../types.js';
 
 export interface RunMetrics {
@@ -60,7 +61,10 @@ export function computeMetrics(runId: string, events: AuditEvent[]): RunMetrics 
     runId,
     totalStagesAttempted: attempted,
     stagesPassed,
-    successRate: attempted > 0 ? stagesPassed / attempted : 0,
+    // Denominated on the FULL graph size, not stages-attempted -- a run that
+    // halts at stage 3 of 8 completed 3/8 = 37.5% of the work, not 100% of
+    // "what it tried." The latter flatters a run that died partway through.
+    successRate: STAGE_GRAPH.length > 0 ? stagesPassed / STAGE_GRAPH.length : 0,
     retryCount,
     rollbackCount,
     replanCount,

@@ -50,15 +50,21 @@ export class PolicyEngine {
   check(ctx: PolicyContext): PolicyCheckResult {
     const violations: PolicyViolation[] = [];
 
-    for (const file of ctx.result.filesChanged ?? []) {
-      const abs = resolve(ctx.projectRoot, file);
+    // Checked against what ChangeTracker actually wrote to disk, NOT the
+    // agent's self-reported `result.filesChanged` -- an agent that writes a
+    // file and omits it from that list would otherwise bypass write
+    // confinement entirely. This is the exact same class of blind spot
+    // already found and fixed once for the secret scan below (which used to
+    // check only scalar `outputs`, never real file content); the sibling
+    // check here had the same gap until now.
+    for (const { path: abs } of ctx.writtenFiles ?? []) {
       const insideAllowed = ctx.allowedWriteDirs.some((dir) => {
         const rel = relative(resolve(ctx.projectRoot, dir), abs);
         return rel !== '' && !rel.startsWith('..') && !rel.startsWith('/');
       });
       if (!insideAllowed) {
         violations.push({
-          message: `change-control: "${file}" is outside allowed write directories (${ctx.allowedWriteDirs.join(', ')})`,
+          message: `change-control: "${abs}" is outside allowed write directories (${ctx.allowedWriteDirs.join(', ')})`,
           severity: 'block',
         });
       }
