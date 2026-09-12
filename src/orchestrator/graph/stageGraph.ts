@@ -76,8 +76,19 @@ export const STAGE_GRAPH: StageNode[] = [
     // only on `testing` having passed, and the playbook behind it never
     // reads those stages' rationale, only the actual file content produced.
     // See agents/playbooks/review.ts.
+    //
+    // The exit gate is deliberately structural only (does review's OWN
+    // mechanism work), not `requireOutputTrue('reviewPassed')` -- a real
+    // finding is not a failure of the review stage itself, so it must not
+    // fall into the retry/fallback/rollback chain built for technical
+    // errors. Instead the playbook returns `upstreamInvalidated` pointing
+    // back at `implementation` (see `reviewFindingsToInvalidation` in
+    // playbooks/review.ts), a genuine re-plan bounded by `maxReplans` --
+    // if the budget is exhausted and a finding still exists, the run
+    // proceeds anyway with the finding intact and visible to the human at
+    // release-readiness, rather than being silently discarded.
     entryGate: requireStagesPassed(['testing']),
-    exitGate: allOf(requireOutputKeys(['reviewFindings', 'reviewPassed']), requireOutputTrue('reviewPassed')),
+    exitGate: requireOutputKeys(['reviewFindings', 'reviewPassed']),
   },
   {
     id: 'documentation',

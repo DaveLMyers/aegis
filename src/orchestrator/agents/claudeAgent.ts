@@ -6,7 +6,7 @@ import type { Agent } from './agent.js';
 import { listProjectFiles } from './codebaseSnapshot.js';
 import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
 import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
-import { readChangedFiles } from './playbooks/review.js';
+import { readChangedFiles, reviewFindingsToInvalidation } from './playbooks/review.js';
 import { APPROVED_TECH_STACK } from '../policy/techStandards.js';
 
 const MODEL = 'claude-sonnet-5';
@@ -229,13 +229,13 @@ suggestions belong in "reviewFindings" without failing the review.`;
       reviewFindings?: string[];
       reviewPassed?: boolean;
     };
+    const reviewFindings = parsed.reviewFindings ?? [];
+    const reviewPassed = parsed.reviewPassed ?? true;
 
     return {
-      outputs: {
-        reviewFindings: parsed.reviewFindings ?? [],
-        reviewPassed: parsed.reviewPassed ?? true,
-      },
+      outputs: { reviewFindings, reviewPassed },
       rationale: parsed.rationale ?? '(no rationale returned by the model)',
+      upstreamInvalidated: reviewFindingsToInvalidation(reviewPassed, reviewFindings),
     };
   }
 }

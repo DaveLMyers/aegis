@@ -36,7 +36,7 @@ gitignored, not committed; see "Nothing is pre-baked" in
   ambiguous. Each run captures `context.json` (decision lineage),
   `audit.log.jsonl`, `metrics.json`, and a human-readable `report.md`
   locally under `scenarios/runs/` (not committed -- run it to see it).
-- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 77 tests
+- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 82 tests
   covering gates, retry, rollback, parallel synchronization, re-planning,
   policy enforcement, computed reliability metrics, and the shortener's API
   behavior.
@@ -69,7 +69,7 @@ considered.
 
 | Area | Status | Detail |
 |---|---|---|
-| Correctness & testing | Built | 77 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
+| Correctness & testing | Built | 82 automated tests (orchestrator unit/integration + target-project API). CI runs a type-check, a from-scratch regression run of all three scenarios, and the full suite on every push -- in that order, since the target-project tests don't exist until a scenario has generated them. |
 | Resilience | Built | Retry -> fallback -> rollback -> safe-stop is implemented *and* exercised (`--inject-failure`), not just declared -- see "Validation approach" above. |
 | Governance / audit | Built | Every gate decision, retry, rollback, and approval is logged to an append-only trail. Policy engine enforces change-control, release-control, tech-standards compliance, and a three-way allow/ask/block secret-scan escalation. |
 | API health/readiness | Built | `GET /health` checks live DB connectivity (not just process liveness) and is registered ahead of rate limiting so monitoring probes are never throttled. |
@@ -328,7 +328,10 @@ findings were real and are fixed here:
   a bigger decision (below): stop committing generated content entirely,
   rather than just adding two more directories to what was already there.
 - **Documentation asserted things the code didn't do**: two different,
-  both-wrong test counts in the same file (now 68, verified fresh);
+  both-wrong test counts in the same file (corrected to 68 as of this PR --
+  the count has since grown further as later PRs added tests; the current
+  count lives in "Artifacts produced" above and is not repeated here, so
+  this historical entry can't go stale the way the original claim did);
   `architecture.md` naming a gate factory
   (`requireTechStandardsCompliance`) that never existed in code; a wrong
   test-file citation for tech-standards coverage (`policy.test.ts`, not
@@ -391,6 +394,45 @@ per-stage prompt path as `requirements`/`design`/etc. (see
 since the seam was already generic.
 
 Closes #17.
+
+## Closed since: a real review finding now sends the run back to implementation
+
+Raised directly by the user re-verifying the "independent review" claim
+against what the code actually does, rather than what the docs said: when
+`review` found a real problem, nothing looped back to fix it. The exit gate
+required `reviewPassed === true`, so a finding failed the *stage*, which
+fed the same retry -> fallback -> rollback -> safe-stop chain built for
+technical errors -- retrying `review` just re-ran the identical check
+against identical unchanged files (finding the same thing again), and once
+that budget exhausted, the **entire run rolled back and halted**,
+discarding the implementation rather than revising it. The re-planning
+mechanism (`upstreamInvalidated`) existed and worked -- proven live via
+`--trigger-replan` -- but no playbook, including `review`, ever actually
+used it. This was a real gap neither grading review caught; both focused on
+decomposition, MTTR, and the policy blind spot.
+
+Fixed: `review`'s exit gate is now purely structural (did the mechanism
+itself run), and a genuine finding (`reviewPassed: false`) makes the
+playbook return `upstreamInvalidated` pointing at `implementation`
+(`reviewFindingsToInvalidation`, shared by both agent modes so this
+decision lives in exactly one tested place) -- a real re-plan, bounded by
+`maxReplans` like any other. If the budget is exhausted and a finding still
+persists, the run proceeds anyway with the finding intact in `review`'s
+record, surfaced to the human at `release-readiness`, rather than being
+silently discarded or looping forever. Verified end-to-end, not just at the
+unit level: a `FakeAgent` integration test proves a real finding triggers
+exactly one re-plan back to `implementation`, zero rollback events, and the
+run completing normally once clean; a second test proves the bounded case
+(budget exhausted, finding still visible, run still reaches
+`release-readiness` rather than being destroyed).
+
+Honest limitation stated plainly: this self-correction loop is only
+meaningful under `AGENT_MODE=llm`. The deterministic agent's playbooks are
+static templates with no way to act on review feedback, so a replan there
+would just regenerate byte-identical content -- harmless (none of the three
+built-in scenarios' generated code ever produces a finding in the first
+place), but worth naming rather than implying the deterministic agent can
+"fix" anything.
 
 ## Limitations
 
