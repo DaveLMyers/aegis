@@ -140,6 +140,27 @@ can't silently propose an unapproved technology. All three scenarios use the
 one pre-approved stack, so the gate always passes cleanly in the captured
 evidence; it's covered directly by unit tests instead.
 
+**Deliberate trade-off -- TypeScript/Node over Python.** Python is the
+default choice for most agentic work, but specifically because of
+frameworks like LangChain/LangGraph/CrewAI -- an advantage that's tied to
+using one of those frameworks, and this brief evaluates a hand-built
+orchestration mechanism instead (see "hand-built, not LangGraph/Temporal"
+above), which neutralizes it. Once the language choice is decoupled from
+any particular AI framework, static typing became the deciding factor for
+a system built around records flowing through an 8-stage pipeline with an
+audit trail and a policy engine: a typo'd field name silently returning
+`undefined` is a real, recurring bug class in a governance-heavy engine,
+not a hypothetical one -- it's the exact shape of two bugs actually caught
+during this build (a gate reading a stage's own not-yet-recorded output
+from the wrong key; `StageRecord.inputs` declared in the schema but never
+populated at any write site, caught during the independent grading review
+above). Catching that class of error at compile time matters more here
+than in typical scripting work, because audit-grade observability is a
+graded requirement, not just a nice-to-have. Express/Node was also simply
+a lightweight, low-ceremony fit for the small REST API fixture, and the
+Anthropic SDK is equally mature in both languages, so the real LLM
+integration wasn't language-constrained either way.
+
 ## Assumptions
 
 The assignment brief itself contains interpretive ambiguity, not just the
