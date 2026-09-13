@@ -202,18 +202,56 @@ export function createTieredRateLimit(db: AegisDb) {
 }
 `;
 
+// Shared across all three scenarios' routes: a URL shortener's #1 named
+// risk is an open redirect -- accepting an arbitrary string as targetUrl
+// means POST /links can be used to mint a same-origin-looking short link
+// that actually redirects to a javascript:/data:/file: URI or anywhere
+// else. Restricting to http/https is the minimum real fix, not a stub.
+export const VALIDATION_TS = `/**
+ * Restricts short-link targets to http/https. Without this, POST /links
+ * would happily store and later 302-redirect to a javascript:/data:/file:
+ * URI -- a well-known "open redirect" vulnerability class specific to URL
+ * shorteners, not a hypothetical concern.
+ */
+export function isValidTargetUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Rejects a malformed expiresAt rather than silently treating it as
+ * "never expires" -- an invalid date string previously produced a NaN
+ * comparison that quietly evaluated false on every check.
+ */
+export function isValidExpiresAt(value: unknown): value is string | undefined {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== 'string') return false;
+  return !Number.isNaN(new Date(value).getTime());
+}
+`;
+
 export const ROUTES_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
 import { publishClick } from './analytics.js';
+import { isValidTargetUrl, isValidExpiresAt } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
   const router = Router();
 
   router.post('/links', (req, res) => {
     const { targetUrl, alias, expiresAt } = req.body ?? {};
-    if (typeof targetUrl !== 'string' || targetUrl.length === 0) {
-      res.status(400).json({ error: 'targetUrl is required' });
+    if (!isValidTargetUrl(targetUrl)) {
+      res.status(400).json({ error: 'targetUrl must be a valid http/https URL' });
+      return;
+    }
+    if (!isValidExpiresAt(expiresAt)) {
+      res.status(400).json({ error: 'expiresAt must be a valid date string if provided' });
       return;
     }
     let code: string = alias;
@@ -276,14 +314,19 @@ export const ROUTES_TIERED_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
 import { publishClick } from './analytics.js';
+import { isValidTargetUrl, isValidExpiresAt } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
   const router = Router();
 
   router.post('/links', (req, res) => {
     const { targetUrl, alias, expiresAt, clientTier } = req.body ?? {};
-    if (typeof targetUrl !== 'string' || targetUrl.length === 0) {
-      res.status(400).json({ error: 'targetUrl is required' });
+    if (!isValidTargetUrl(targetUrl)) {
+      res.status(400).json({ error: 'targetUrl must be a valid http/https URL' });
+      return;
+    }
+    if (!isValidExpiresAt(expiresAt)) {
+      res.status(400).json({ error: 'expiresAt must be a valid date string if provided' });
       return;
     }
     let code: string = alias;
@@ -458,6 +501,27 @@ describe('url shortener API', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects a non-http(s) targetUrl (open-redirect guard)', async () => {
+    const app = createServer(':memory:');
+    const res = await request(app).post('/links').send({ targetUrl: 'javascript:alert(1)' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/http\\/https/);
+  });
+
+  it('rejects a malformed expiresAt instead of silently treating it as never-expiring', async () => {
+    const app = createServer(':memory:');
+    const res = await request(app)
+      .post('/links')
+      .send({ targetUrl: 'https://example.com', expiresAt: 'not-a-date' });
+    expect(res.status).toBe(400);
+  });
+
+  it('still accepts a well-formed http/https targetUrl', async () => {
+    const app = createServer(':memory:');
+    const res = await request(app).post('/links').send({ targetUrl: 'http://example.com/page' });
+    expect(res.status).toBe(201);
+  });
+
   it('returns 404 for an unknown short code', async () => {
     const app = createServer(':memory:');
     const res = await request(app).get('/does-not-exist');
@@ -473,14 +537,19 @@ export const ROUTES_TIERED_ANALYTICS_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
 import { publishClick } from './analytics.js';
+import { isValidTargetUrl, isValidExpiresAt } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
   const router = Router();
 
   router.post('/links', (req, res) => {
     const { targetUrl, alias, expiresAt, clientTier } = req.body ?? {};
-    if (typeof targetUrl !== 'string' || targetUrl.length === 0) {
-      res.status(400).json({ error: 'targetUrl is required' });
+    if (!isValidTargetUrl(targetUrl)) {
+      res.status(400).json({ error: 'targetUrl must be a valid http/https URL' });
+      return;
+    }
+    if (!isValidExpiresAt(expiresAt)) {
+      res.status(400).json({ error: 'expiresAt must be a valid date string if provided' });
       return;
     }
     let code: string = alias;
