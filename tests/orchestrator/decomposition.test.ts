@@ -34,19 +34,19 @@ function assertValidTaskGraph(result: StageExecutionResult) {
 }
 
 describe('decompositionPlaybooks', () => {
-  it('greenfield: derives tasks from requirements\' recorded scope', () => {
+  it('greenfield: derives tasks from requirements\' recorded scope', async () => {
     const ctx = ctxWithRequirements('greenfield', { scope: ['POST /links', 'GET /:code', 'GET /:code/stats'] });
-    const result = decompositionPlaybooks.greenfield(ctx, io);
+    const result = await decompositionPlaybooks.greenfield(ctx, io);
     const tasks = assertValidTaskGraph(result);
     expect(tasks.some((t) => t.description.includes('POST /links'))).toBe(true);
   });
 
-  it('brownfield: derives different tasks than greenfield for the same requirement scope shape', () => {
+  it('brownfield: derives different tasks than greenfield for the same requirement scope shape', async () => {
     const ctx = ctxWithRequirements('brownfield', { scope: ['client_tier on links', 'POST /links accepts clientTier', 'tiered limiter on GET /:code'] });
-    const result = decompositionPlaybooks.brownfield(ctx, io);
+    const result = await decompositionPlaybooks.brownfield(ctx, io);
     const tasks = assertValidTaskGraph(result);
     const greenfieldTasks = assertValidTaskGraph(
-      decompositionPlaybooks.greenfield(ctxWithRequirements('greenfield', { scope: [] }), io),
+      await decompositionPlaybooks.greenfield(ctxWithRequirements('greenfield', { scope: [] }), io),
     );
     const taskIds = tasks.map((t) => t.id);
     const greenfieldIds = greenfieldTasks.map((t) => t.id);
@@ -54,17 +54,26 @@ describe('decompositionPlaybooks', () => {
     expect(tasks.some((t) => t.id === 'inspect')).toBe(true);
   });
 
-  it('ambiguous: derives tasks from the chosen interpretation, not the raw ambiguous text', () => {
+  it('ambiguous: derives tasks from the chosen interpretation, not the raw ambiguous text', async () => {
     const ctx = ctxWithRequirements('ambiguous', {
       normalizedRequirement: 'Richer analytics for premium clients: referrer breakdown.',
     });
-    const result = decompositionPlaybooks.ambiguous(ctx, io);
+    const result = await decompositionPlaybooks.ambiguous(ctx, io);
     const tasks = assertValidTaskGraph(result);
     expect(tasks.some((t) => t.description.includes('referrer breakdown'))).toBe(true);
   });
 
-  it('throws on injected failure, same as every other playbook', () => {
+  it('throws on injected failure, same as every other playbook', async () => {
     const ctx = ctxWithRequirements('greenfield', { scope: [] });
-    expect(() => decompositionPlaybooks.greenfield(ctx, { ...io, simulateFailure: true })).toThrow();
+    await expect(decompositionPlaybooks.greenfield(ctx, { ...io, simulateFailure: true })).rejects.toThrow();
+  });
+
+  describe('human approval checkpoint', () => {
+    it('auto-approves the plan under --auto-approve, and records that it did', async () => {
+      const ctx = ctxWithRequirements('greenfield', { scope: [] });
+      const result = await decompositionPlaybooks.greenfield(ctx, { ...io, autoApprove: true });
+      expect(result.outputs.approved).toBe(true);
+      expect(result.rationale).toContain('auto-approved');
+    });
   });
 });

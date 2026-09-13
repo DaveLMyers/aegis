@@ -55,11 +55,18 @@ async function design(_ctx: ProjectContext, io: StageExecutionOptions, projectRo
   return {
     outputs: {
       designDoc:
-        "Extend GET /:code/stats: when a link's client_tier is premium, additionally query click_events grouped by referrer and include it in the response; standard-tier responses are byte-for-byte unchanged.",
+        "Extend GET /:code/stats: when a link's client_tier is premium, additionally query click_events grouped by referrer and include it in the response; standard-tier responses are byte-for-byte unchanged. Considered adding Redis to cache the referrer aggregation for premium links under higher traffic, but Redis is not on the approved technology list for this prototype -- surfaced below as an explicit policy escalation for a human to decide, rather than silently adopting it or silently dropping the idea.",
       impactedModules: ['src/target-project/routes.ts'],
-      technologies: ['typescript', 'node.js', 'express', 'better-sqlite3'],
+      // Deliberately includes an off-standard technology (redis) -- this is
+      // the THIRD human checkpoint (Core Requirement 4's "checkpoints,"
+      // plural), distinct from decomposition-plan approval and
+      // release-readiness: PolicyEngine's tech-standards check (policy/
+      // policyEngine.ts) turns this into a real 'ask' escalation on a live
+      // run, not just a mechanism that exists in the abstract.
+      technologies: ['typescript', 'node.js', 'express', 'better-sqlite3', 'redis'],
     },
-    rationale: 'confirmed the tiering groundwork from the brownfield change already exists on disk before designing on top of it',
+    rationale:
+      'confirmed the tiering groundwork from the brownfield change already exists on disk before designing on top of it; also considered an off-standard caching technology (Redis) for this workload and surfaced it as a policy escalation rather than deciding unilaterally',
   };
 }
 

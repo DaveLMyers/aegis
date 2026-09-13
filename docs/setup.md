@@ -31,8 +31,15 @@ Each run prints a status line and writes its full evidence to
 - `report.md` -- a human-readable summary of both
 - `report.html` -- the same summary as a self-contained dashboard (no server, no build step -- just open it in a browser): reliability metrics as color-coded stat cards, the task graph as a real table, stage-by-stage lineage as cards. Open it directly, e.g. on Windows: `start scenarios/runs/greenfield/<run-id>/report.html`
 
-Drop `--auto-approve` to be prompted interactively at the `release-readiness`
-human-approval gate instead.
+Drop `--auto-approve` to be prompted interactively instead -- there are
+three checkpoints, not one (see "Human approval checkpoints" in
+[architecture.md](./architecture.md)): a plan-approval prompt right after
+`decomposition`, a policy escalation during `design` on the `ambiguous`
+scenario specifically (an off-standard technology it considers and
+surfaces rather than adopting silently), and the `release-readiness` gate
+at the very end. All three are answered the same way (`y`/`N`) and, without
+`--auto-approve`, `ambiguous` is the scenario that will actually hit all
+three in one run.
 
 > **Windows/PowerShell note:** `npm run dev -- run greenfield --auto-approve`
 > can silently drop everything after `--` when invoked from PowerShell

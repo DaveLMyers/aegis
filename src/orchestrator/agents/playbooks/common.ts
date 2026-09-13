@@ -48,6 +48,45 @@ export async function testingPlaybook(
 }
 
 /**
+ * Second human-approval checkpoint (Core Requirement 4 calls for
+ * "checkpoints," plural, and Core Requirement 7 for "approvals," plural --
+ * release-readiness alone was only one). This one gates the *plan*, not the
+ * output: a human signs off on the task graph decomposition produced before
+ * implementation spends any effort executing it. Shared by both agent modes
+ * for the same reason releaseReadinessPlaybook is shared with ClaudeAgent --
+ * an LLM should not self-approve its own plan any more than it should
+ * self-report its own tests passing.
+ */
+export async function withDecompositionApproval(
+  base: StageExecutionResult,
+  io: StageExecutionOptions,
+): Promise<StageExecutionResult> {
+  const tasks = (base.outputs.tasks as Array<{ id: string; description: string }> | undefined) ?? [];
+  const summary = `Task graph for decomposition (${tasks.length} task(s)):\n${tasks
+    .map((t) => `  - ${t.id}: ${t.description}`)
+    .join('\n')}`;
+
+  let approved: boolean;
+  let approvalNote: string;
+  if (io.autoApprove) {
+    approved = true;
+    approvalNote =
+      'auto-approved for a scripted/demo run (--auto-approve); a real rollout would require an interactive human sign-off on the plan before implementation begins';
+  } else {
+    approved = await requestApproval(summary);
+    approvalNote = approved
+      ? 'plan approved interactively by a human operator at the CLI'
+      : 'plan rejected interactively by a human operator at the CLI -- implementation will not proceed';
+  }
+
+  return {
+    ...base,
+    outputs: { ...base.outputs, approved },
+    rationale: `${base.rationale}; ${approvalNote}`,
+  };
+}
+
+/**
  * Shared human-approval checkpoint. `--auto-approve` is what lets scenario
  * runs complete unattended for the captured evidence in scenarios/runs/, but
  * every approval -- auto or human -- is recorded explicitly in the audit

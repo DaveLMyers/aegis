@@ -2,8 +2,24 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runScenario, FIXTURE_ALLOWED_WRITE_DIRS, EXTERNAL_TARGET_ALLOWED_WRITE_DIRS } from './runOrchestrator.js';
+import { closeApprovalInterface } from './approval.js';
 import { resolveTargetRepo } from './targetRepo.js';
-import type { RunOptions, ScenarioDefinition, StageId } from './types.js';
+import type { RunOptions, ScenarioDefinition, ScenarioType, StageId } from './types.js';
+
+/**
+ * Printed at the start of every run, before anything else -- without it,
+ * the CLI only ever showed a scenario's *name*, never its intent, so a
+ * viewer with no access to report.md had no way to know what a run was
+ * actually trying to prove until it either completed or halted.
+ */
+const SCENARIO_INTENT: Partial<Record<ScenarioType, string>> = {
+  greenfield:
+    'the full 9-stage pipeline building a system from nothing -- no prior codebase to reason about, a well-specified requirement.',
+  brownfield:
+    'real codebase-reasoning -- the design stage reads the existing target-project files on disk and confirms their actual shape before proposing a change, then extends the system without breaking existing behavior.',
+  ambiguous:
+    'genuine requirement interpretation -- the requirements stage must enumerate candidate readings of a deliberately vague ask, rule some out with a stated reason, and record its assumptions before decomposition can proceed.',
+};
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** The AEGIS repo itself -- always where scenario configs and run evidence live, regardless of what's being built. */
@@ -134,6 +150,10 @@ async function main() {
   };
 
   console.log(`\nAEGIS -- running scenario "${scenario.name}" (${scenario.type}), agentMode=${options.agentMode}`);
+  console.log(`  Requirement: ${scenario.requirementText}`);
+  if (SCENARIO_INTENT[scenario.type]) {
+    console.log(`  Demonstrates: ${SCENARIO_INTENT[scenario.type]}`);
+  }
   if (targetRepoArg) {
     console.log(`  target: ${targetProjectRoot} (${targetRepoArg === targetProjectRoot ? 'local path' : `cloned from ${targetRepoArg}`})`);
   }
@@ -151,7 +171,17 @@ async function main() {
   }
   console.log('');
 
-  const summary = await runScenario(scenario, options, aegisRoot, targetProjectRoot, allowedWriteDirs);
+  let summary: Awaited<ReturnType<typeof runScenario>>;
+  try {
+    summary = await runScenario(scenario, options, aegisRoot, targetProjectRoot, allowedWriteDirs);
+  } finally {
+    // A run that never hit an approval prompt never opened the shared
+    // readline interface -- closeApprovalInterface() is a no-op then. A run
+    // that did hit one or more (decomposition, policy escalations,
+    // release-readiness) would otherwise leave the process hanging open on
+    // stdin forever after its last prompt.
+    closeApprovalInterface();
+  }
 
   console.log(
     `\nRun ${summary.status === 'completed' ? 'COMPLETED' : `HALTED${summary.haltedStage ? ` at "${summary.haltedStage}"` : ''}`}`,

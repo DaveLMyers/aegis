@@ -1,6 +1,7 @@
 import type { ProjectContext } from '../../state/projectContext.js';
 import type { StageExecutionResult, Task } from '../../types.js';
 import type { StageExecutionOptions } from '../agent.js';
+import { withDecompositionApproval } from './common.js';
 
 /**
  * Core Requirement 2 (Task Decomposition), made concrete: converts the
@@ -61,4 +62,8 @@ function ambiguous(ctx: ProjectContext, io: StageExecutionOptions): StageExecuti
   };
 }
 
-export const decompositionPlaybooks = { greenfield, brownfield, ambiguous };
+export const decompositionPlaybooks = {
+  greenfield: async (ctx: ProjectContext, io: StageExecutionOptions) => withDecompositionApproval(greenfield(ctx, io), io),
+  brownfield: async (ctx: ProjectContext, io: StageExecutionOptions) => withDecompositionApproval(brownfield(ctx, io), io),
+  ambiguous: async (ctx: ProjectContext, io: StageExecutionOptions) => withDecompositionApproval(ambiguous(ctx, io), io),
+};
