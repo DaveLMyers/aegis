@@ -501,6 +501,63 @@ confirms `openapi.yaml` evolves correctly on disk after each run.
 
 Closes #30.
 
+## Closed since: a second and third human approval checkpoint (Core Requirement 4/7)
+
+Found on a re-read of the brief while preparing to walk through it live:
+Core Requirement 4 asks the orchestration to "enforce human approval
+**checkpoints** for high-impact actions" and Core Requirement 7 says humans
+provide "oversight, **approvals**, and final quality control" -- both
+plural. Until now there was exactly one exercised checkpoint
+(release-readiness, at the very end of the pipeline) plus one mechanism
+that existed in the code but was never actually triggered by any of the
+three built-in scenarios (PolicyEngine's `ask` decision). Same standard
+applied to Core Requirement 5's API/schema gap above: explicit brief
+language, not an inferred nicety, so treated as a must-fix.
+
+Two real, exercised checkpoints were added, both reusing the existing
+`requestApproval` mechanism rather than inventing a new one:
+
+1. **Decomposition-plan approval.** `decomposition` now carries
+   `requiresApproval: true` (`graph/stageGraph.ts`), gated by
+   `withDecompositionApproval()` (`agents/playbooks/common.ts`) -- a human
+   signs off on the task graph itself before any implementation effort is
+   spent executing it, distinct from approving the *finished* output at
+   release-readiness. Shared by both agent modes: `ClaudeAgent` cannot
+   self-approve its own plan any more than it can self-report its own tests
+   passing (the same principle already applied to `testing` and
+   `release-readiness`).
+2. **A genuinely-firing policy escalation.** Rather than add a debug flag
+   just to prove the mechanism works, the `ambiguous` scenario's `design`
+   stage now narratively considers an off-standard technology (Redis, for
+   caching a referrer aggregation) and surfaces it as `technologies`,
+   which PolicyEngine's tech-standards check turns into a real `ask`
+   escalation on an ordinary `ambiguous` run -- not a synthetic
+   demonstration path, part of the scenario's own design reasoning.
+
+A single `ambiguous` run without `--auto-approve` now hits all three
+checkpoints in sequence: plan approval, the Redis policy escalation, and
+release-readiness -- verified both via the automated suite and a live,
+hands-on run (typing `y`, `y`, `n` at an actual keyboard).
+
+**A real bug found and fixed along the way**: `approval.ts` created and
+closed a fresh `readline` interface on `process.stdin` for every single
+call. With only one checkpoint in the whole run this was invisible; with
+two or three in the same process, the second prompt hung indefinitely --
+closing a readline interface bound to `process.stdin` leaves it in a state
+a newly-created interface cannot reliably resume reading from. Reproduced
+in isolation before fixing (not assumed): a standalone script issuing three
+sequential `requestApproval()` calls hung on the second one. Fixed by
+reusing a single interface for the process's lifetime, closed explicitly by
+the CLI once a run is fully done (`closeApprovalInterface()` in `cli.ts`),
+rather than per-call.
+
+Also added while in this area, addressing separate live-demo feedback: the
+CLI now prints a scenario's requirement text and a one-line description of
+what it's intended to demonstrate at the very start of a run
+(`SCENARIO_INTENT` in `cli.ts`) -- previously the only console output for
+most of a run's ~1 second of real work was a bare scenario name, with
+nothing explaining intent unless you already knew to open `report.md`.
+
 ## Limitations
 
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic

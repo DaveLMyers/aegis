@@ -24,9 +24,9 @@ requirements
      |
      v
 decomposition  <-- normalized requirement -> real task graph (Core Requirement 2)
-     |
+     |          <-- HUMAN APPROVAL CHECKPOINT #1: sign off on the plan itself
      v
-   design  --(tech-standards: policy 'ask' escalation)-->
+   design  --(tech-standards: policy 'ask' escalation)--> HUMAN APPROVAL CHECKPOINT #2 (ambiguous scenario)
      |
      +----------------+
      v                v
@@ -43,7 +43,7 @@ implementation   test-authoring     (parallel, share only the `design` dependenc
         documentation
               |
               v
-       release-readiness  <-- human approval gate
+       release-readiness  <-- HUMAN APPROVAL CHECKPOINT #3: the finished output
 ```
 
 `implementation` and `test-authoring` both depend only on `design` and not on
@@ -101,20 +101,34 @@ renders when this fires). See `src/orchestrator/graph/executor.ts` and
 | Observability | `observability/auditLog.ts`, `observability/metrics.ts` | Append-only JSONL audit trail; success rate / retry-rollback frequency / MTTR / latency computed from that trail |
 | Replanner | `replanner.ts` | Bounds how many times a stage may trigger a re-plan |
 
-## Human approval checkpoint
+## Human approval checkpoints
 
-`release-readiness` is the one stage flagged `requiresApproval: true`. Its
-playbook (`agents/playbooks/common.ts:releaseReadinessPlaybook`) either:
-- auto-approves when the run was started with `--auto-approve` (used for the
-  captured scenario evidence in `scenarios/runs/`, since those need to
-  complete unattended), or
-- prompts interactively at the CLI and records the human's actual decision.
+Core Requirement 4 asks for "human approval **checkpoints**," plural, and
+Core Requirement 7 for "oversight, **approvals**, and final quality
+control" -- also plural. AEGIS has three, each gating a genuinely different
+kind of decision, not the same checkpoint repeated:
 
-Either way, the decision is written to the audit trail explicitly (never
-silently implied), and a rejection fails the stage's exit gate exactly like
-any other failed condition — triggering the same retry/fallback/rollback
-chain, so a human "no" genuinely blocks the pipeline rather than being a
-no-op checkbox.
+| # | Stage | Gates | What a human is actually deciding |
+|---|---|---|---|
+| 1 | `decomposition` | `requiresApproval: true` (`graph/stageGraph.ts`), via `withDecompositionApproval` (`agents/playbooks/common.ts`) | The *plan* itself, before any implementation effort is spent executing it |
+| 2 | `design` (currently only the `ambiguous` scenario exercises this) | `PolicyEngine`'s tech-standards check returning `ask` | Whether an off-standard technology proposal (Redis, considered for caching) is acceptable, given the design stage's own trade-off rationale |
+| 3 | `release-readiness` | `requiresApproval: true`, via `releaseReadinessPlaybook` | The *finished, tested, reviewed* output, immediately before release |
+
+All three share the same underlying mechanism (`requestApproval` in
+`approval.ts`): auto-approve when the run was started with `--auto-approve`
+(used for unattended scenario evidence), or prompt interactively at the CLI
+and record the human's actual decision. Either way the decision is written
+to the audit trail explicitly, never silently implied, and a rejection at
+checkpoint #1 or #3 halts the run immediately (`ApprovalRejectedError` in
+`executor.ts` -- a human "no" is a terminal decision, not something retried
+or fallen back from) rather than being a no-op checkbox. Checkpoint #2's
+mechanism is the same three-way `allow`/`ask`/`block` PolicyEngine decision
+described below, applied on every stage transition, not just at design.
+
+Both agent modes share checkpoints #1 and #3 for the same reason: an LLM
+should not approve its own plan any more than it should self-report its own
+tests passing (see [Independent review](#independent-review-not-just-multi-role)
+for the same principle applied to code review).
 
 ## Resilience chain
 

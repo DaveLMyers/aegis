@@ -18,8 +18,11 @@ an actual governed pipeline. The stages form a real graph, not a hardcoded
 script -- work can branch into concurrent paths and rejoin at a
 synchronization point, and every stage's reasoning is carried forward
 rather than discarded once the next one starts. A person, not the AI, has
-to say yes before anything reaches release, and a "no" is respected
-immediately rather than retried. When a step fails, the system doesn't just
+to sign off at three genuinely different points -- on the plan itself
+before implementation starts, on any proposal that deviates from approved
+technology standards, and on the finished, tested output before release --
+and a "no" at any of them is respected immediately rather than retried.
+When a step fails, the system doesn't just
 error out: it retries, falls back to a simpler approach, and if that still
 doesn't work, reverts every file it touched and stops cleanly instead of
 leaving something half-built. Guardrails run automatically at each handoff
@@ -33,6 +36,11 @@ affected work instead of continuing on a bad assumption. All of it is
 exercised across three different kinds of requirement: building something
 new, changing something that already exists, and one left deliberately
 vague until the system itself has to work out what's actually being asked.
+Between them, the three scenarios cover every category the assignment's
+scope lists (new systems/features, enhancements, well-defined vs. ambiguous
+requirements); test and documentation work isn't a separate fourth
+scenario, it's a stage present in all three runs (`test-authoring` and
+`documentation` both actually write real artifacts every time, not stubs).
 
 ## Quick start
 

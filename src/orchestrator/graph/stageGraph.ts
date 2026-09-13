@@ -32,8 +32,15 @@ export const STAGE_GRAPH: StageNode[] = [
     // broken into actionable tasks with real dependencies and sequencing --
     // Core Requirement 2, made concrete rather than conflated with the
     // fixed stage graph. See agents/playbooks/decomposition.ts.
+    //
+    // requiresApproval: this is the SECOND human checkpoint (Core
+    // Requirement 4 asks for "checkpoints," plural) -- a human signs off on
+    // the plan itself before any implementation effort is spent executing
+    // it, distinct from release-readiness's checkpoint at the very end. See
+    // withDecompositionApproval in agents/playbooks/common.ts.
+    requiresApproval: true,
     entryGate: requireStagesPassed(['requirements']),
-    exitGate: allOf(requireOutputKeys(['tasks']), requireValidTaskGraph()),
+    exitGate: allOf(requireOutputKeys(['tasks']), requireValidTaskGraph(), requireOutputTrue('approved')),
   },
   {
     id: 'design',

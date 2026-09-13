@@ -4,7 +4,7 @@ import type { StageExecutionOptions } from './agent.js';
 import type { StageExecutionResult, StageId } from '../types.js';
 import type { Agent } from './agent.js';
 import { listProjectFiles } from './codebaseSnapshot.js';
-import { releaseReadinessPlaybook, testingPlaybook } from './playbooks/common.js';
+import { releaseReadinessPlaybook, testingPlaybook, withDecompositionApproval } from './playbooks/common.js';
 import { githubReleaseReadinessPlaybook } from './playbooks/githubApproval.js';
 import { readChangedFiles, reviewFindingsToInvalidation } from './playbooks/review.js';
 import { APPROVED_TECH_STACK } from '../policy/techStandards.js';
@@ -13,7 +13,7 @@ const MODEL = 'claude-sonnet-5';
 
 const STAGE_OUTPUT_CONTRACTS: Record<StageId, string> = {
   requirements: 'normalizedRequirement (string), assumptions (string[])',
-  decomposition: 'tasks (array of { id: string, description: string, dependsOn: string[], acceptanceCriteria: string }) -- a real work breakdown of the normalized requirement, not the SDLC lifecycle; every dependsOn id must reference another task in the same array, no cycles',
+  decomposition: 'tasks (array of { id: string, description: string, dependsOn: string[], acceptanceCriteria: string }) -- a real work breakdown of the normalized requirement, not the SDLC lifecycle; every dependsOn id must reference another task in the same array, no cycles', // "approved" is NOT part of the model's contract -- withDecompositionApproval adds it after the fact, the same human checkpoint the deterministic agent uses
   design: 'designDoc (string), impactedModules (string[]), technologies (string[])',
   implementation: 'filesChanged (string[], must match the paths given in "files")',
   'test-authoring': 'testFilesChanged (string[], must match the paths given in "files")',
@@ -160,12 +160,18 @@ ${stageId}: ${STAGE_OUTPUT_CONTRACTS[stageId]}`;
       outputs[key] = filesChanged;
     }
 
-    return {
+    const result: StageExecutionResult = {
       outputs,
       rationale: parsed.rationale ?? '(no rationale returned by the model)',
       assumptions: parsed.assumptions ?? [],
       filesChanged,
     };
+
+    // The model proposes the plan; it does not get to approve its own plan
+    // any more than it self-reports its own tests passing (see the
+    // testing/release-readiness special-case above) -- same shared
+    // checkpoint the deterministic agent uses.
+    return stageId === 'decomposition' ? withDecompositionApproval(result, io) : result;
   }
 
   /**

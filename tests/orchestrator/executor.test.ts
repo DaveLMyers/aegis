@@ -16,7 +16,17 @@ function defaultOutputsFor(stageId: StageId, io: StageExecutionOptions): StageEx
     case 'requirements':
       return { outputs: { normalizedRequirement: 'x', assumptions: [] }, rationale: 'ok' };
     case 'decomposition':
-      return { outputs: { tasks: [{ id: 't1', description: 'x', dependsOn: [], acceptanceCriteria: 'x' }] }, rationale: 'ok' };
+      // Unlike release-readiness's default below, this is NOT tied to
+      // io.autoApprove -- several tests set autoApprove:false globally to
+      // exercise a rejection at a *different* stage, and decomposition
+      // passing is their assumed happy-path precondition, not what's under
+      // test. Tests that specifically want a decomposition rejection
+      // override this stage explicitly (see "halts immediately on an
+      // explicit decomposition-plan rejection" below).
+      return {
+        outputs: { tasks: [{ id: 't1', description: 'x', dependsOn: [], acceptanceCriteria: 'x' }], approved: true },
+        rationale: 'ok',
+      };
     case 'design':
       return { outputs: { designDoc: 'x', impactedModules: [], technologies: ['typescript'] }, rationale: 'ok' };
     case 'implementation':
@@ -238,6 +248,30 @@ describe('executeGraph', () => {
     expect(eventTypes).not.toContain('retry');
     expect(eventTypes).not.toContain('fallback');
     expect(eventTypes).not.toContain('stage-fail');
+  });
+
+  it('halts immediately on an explicit decomposition-plan rejection, without ever reaching implementation', async () => {
+    const ctx = new ProjectContext(scenario, 'run-12');
+    const audit = new AuditLog(join(projectRoot, 'audit.log.jsonl'), 'run-12');
+    let decompositionCalls = 0;
+    const agent = new FakeAgent({
+      decomposition: () => {
+        decompositionCalls++;
+        return { outputs: { tasks: [{ id: 't1', description: 'x', dependsOn: [], acceptanceCriteria: 'x' }], approved: false }, rationale: 'human said no to the plan' };
+      },
+    });
+    const options = baseOptions({ autoApprove: false });
+    const result = await executeGraph(ctx, agent, options, audit, new PolicyEngine(), projectRoot, []);
+
+    expect(result.status).toBe('halted');
+    expect(result.haltedStage).toBe('decomposition');
+    expect(decompositionCalls).toBe(1);
+    expect(ctx.latest('decomposition')?.status).toBe('halted');
+    expect(ctx.hasPassed('design')).toBe(false);
+    const eventTypes = audit.all().map((e) => e.type);
+    expect(eventTypes).toContain('approval-rejected');
+    expect(eventTypes).not.toContain('retry');
+    expect(eventTypes).not.toContain('fallback');
   });
 
   it('recovers via fallback and produces a real, non-null MTTR (regression: stage-fail must fire on primary exhaustion, not only on total failure)', async () => {
