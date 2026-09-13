@@ -139,6 +139,34 @@ npm run dev -- run greenfield --auto-approve --inject-failure=design --inject-fa
 Check `metrics.json` (or `report.html`) afterward -- `mttrMs` will be a real
 number, not `null`.
 
+## Demonstrating non-linear re-planning
+
+Distinct from the resilience paths above (retry/fallback/rollback never
+move to a *different* stage -- they retry the same one). Core Requirement
+4 separately asks for "non-linear, stateful execution... rather than
+simple linear task chaining," and for the engine to "dynamically re-plan
+when upstream outputs change." `review` triggers this for real when it
+finds a genuine issue (see `reviewFindingsToInvalidation` in
+`agents/playbooks/review.ts`), but the deterministic playbooks' templates
+are pre-vetted and never trip that in practice. `--trigger-replan` forces
+the same real mechanism to fire on demand, for demonstration:
+
+```bash
+npm run dev -- run greenfield --auto-approve --trigger-replan=testing:design
+```
+
+Run this right after `npm run reset` -- running `greenfield` again after
+`brownfield`/`ambiguous` have already run will spuriously fail `testing`
+against their leftover tiered/analytics test files (a scenario-ordering
+quirk, not a bug in this feature).
+
+Verified output: `design` runs and passes, then a `replan` event fires
+(`testing` flagged `design` as invalidated), then `design` runs *again*.
+`report.md` surfaces this explicitly -- a "Re-planning events" note at the
+top, and both the pre- and post-replan `design` records kept in the
+stage-by-stage lineage (nothing pruned) -- plus "Replans: 1" in the
+reliability metrics.
+
 ## Optional: real LLM-backed agent
 
 By default, every stage is executed by `DeterministicAgent` (offline,
