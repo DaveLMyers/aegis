@@ -11,6 +11,7 @@ import {
   ROUTES_TS,
   SERVER_TS,
   SHORTENER_TEST_TS,
+  VALIDATION_TS,
 } from './targetProjectTemplates.js';
 
 const ASSUMPTIONS = [
@@ -62,6 +63,7 @@ async function implementation(_ctx: ProjectContext, io: StageExecutionOptions, _
     'src/target-project/codeGen.ts': CODEGEN_TS,
     'src/target-project/analytics.ts': ANALYTICS_TS,
     'src/target-project/rateLimit.ts': RATE_LIMIT_TS,
+    'src/target-project/validation.ts': VALIDATION_TS,
     'src/target-project/routes.ts': ROUTES_TS,
     'src/target-project/server.ts': SERVER_TS,
     'src/target-project/index.ts': INDEX_TS,

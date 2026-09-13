@@ -2,14 +2,18 @@
 
 ## Plan & rationale
 
-The brief asks for two things: a URL-shortener service, and an agentic
-orchestration layer that coordinates the SDLC work to build it, with real
-governance (gates, approvals, resilience, audit, metrics) rather than a
-linear script. The evaluation criteria list orchestration effectiveness
-first and call it the "critical differentiator" -- so the shortener was
-treated throughout as the *fixture* the engine is demonstrated against, not
-the deliverable, and effort was weighted accordingly: most of the design
-work went into `src/orchestrator/`, not `src/target-project/`.
+The brief asks for two things, at two different levels, not one thing
+described twice: an agentic orchestration layer (Core Requirement 4,
+explicitly the "critical differentiator," listed first in the Evaluation
+Criteria) that coordinates the SDLC work, and a genuinely production-quality
+URL-shortener service as its output (Core Requirement 5's "production-quality
+code... with clean design and maintainability," and the "realism/quality of
+outputs" evaluation criterion). Most of the design effort was weighted
+toward `src/orchestrator/`, since it's the explicitly-named differentiator
+-- but the shortener the engine produces is a real, separately-judged
+artifact, not a disposable prop, and its own code quality was given a
+dedicated, later review pass for exactly that reason (see "Closed since:
+target-project security/validation hardening" below).
 
 Given a ~6-8 hour time-box, the build order was a thin vertical slice first
 (one scenario, end-to-end, through every stage with a minimal version of
@@ -39,10 +43,10 @@ gitignored, not committed; see "Nothing is pre-baked" in
   self-contained `report.html` dashboard (reliability metrics as
   color-coded stat cards, no server or build step needed) locally under
   `scenarios/runs/` (not committed -- run it to see it).
-- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 92 tests
+- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 98 tests
   covering gates, retry, rollback, parallel synchronization, re-planning,
   policy enforcement, computed reliability metrics, and the shortener's API
-  behavior.
+  behavior (including its input-validation/security guards).
 - **Docs** -- `README.md`, `docs/architecture.md`, `docs/setup.md`, this file.
 
 ## Validation approach
@@ -557,6 +561,49 @@ what it's intended to demonstrate at the very start of a run
 (`SCENARIO_INTENT` in `cli.ts`) -- previously the only console output for
 most of a run's ~1 second of real work was a bare scenario name, with
 nothing explaining intent unless you already knew to open `report.md`.
+
+## Closed since: target-project security/validation hardening
+
+Found via a direct, dedicated code-quality review of the *generated*
+shortener code -- distinct from every earlier review pass this project ran,
+all of which checked whether AEGIS's orchestration satisfied the brief's
+orchestration requirements, never whether the code it produces is actually
+good, production-quality software (Core Requirement 5; "realism/quality of
+outputs" and "secure... code" in the Evaluation Criteria). Two real,
+previously-undocumented issues, found by reading `routes.ts` the way a
+reviewer reads a colleague's PR, not by re-running the orchestrator:
+
+1. **Open redirect.** `POST /links` accepted any non-empty string as
+   `targetUrl`, including a `javascript:` URI or any other scheme --
+   allowing a short link to be minted that redirects somewhere other than
+   a real destination page. A well-known, named vulnerability class
+   specific to URL shorteners, not a hypothetical concern.
+2. **Malformed `expiresAt` silently accepted.** An invalid date string
+   produced a `NaN` comparison in the redirect handler that quietly
+   evaluated `false` on every expiry check -- the link would never be
+   treated as expired, silently, rather than the input being rejected.
+
+Fixed with a new shared module (`validation.ts`, written by all three
+scenarios' `implementation` stage) -- `isValidTargetUrl` restricts targets
+to `http`/`https`, `isValidExpiresAt` rejects a malformed date rather than
+silently accepting it. Applied consistently across all three routes
+templates (`ROUTES_TS`, `ROUTES_TIERED_TS`, `ROUTES_TIERED_ANALYTICS_TS`)
+rather than duplicated inline, since all three share the same
+vulnerability. Verified three ways: new unit tests
+(`tests/target-project/shortener.test.ts`) asserting a `javascript:` URI
+and a malformed date are both rejected with 400 while a legitimate
+`http`/`https` URL still succeeds; a live run against the actual API
+(`curl`) confirming the same three cases; and the full 98-test suite plus a
+fresh 3-scenario regression, both green.
+
+**Not fixed, and staying a documented, deliberate simplification rather
+than an oversight**: short codes are generated with `Math.random()`
+(`codeGen.ts`), which is fine for basic collision avoidance in a prototype
+but not a cryptographically secure source of randomness -- if codes were
+ever meant to resist enumeration/guessing, this is the wrong tool. There is
+still no auth/ownership model (already a stated assumption from the
+`requirements` stage, not new). Both are real, known trade-offs for a
+prototype at this scope, not silently unaddressed gaps.
 
 ## Limitations
 
