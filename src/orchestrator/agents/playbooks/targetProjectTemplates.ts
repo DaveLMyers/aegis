@@ -80,14 +80,20 @@ export function createDb(path: string = process.env.AEGIS_DB_PATH ?? DEFAULT_DB_
 export type AegisDb = ReturnType<typeof createDb>;
 `;
 
-export const CODEGEN_TS = `import type { AegisDb } from './db.js';
+export const CODEGEN_TS = `import { randomInt } from 'node:crypto';
+import type { AegisDb } from './db.js';
 
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+/**
+ * Uses a cryptographically secure RNG, not Math.random() -- short codes
+ * are public identifiers reachable by anyone who has one, so a predictable
+ * generator would make other users' codes guessable/enumerable.
+ */
 export function randomCode(length = 7): string {
   let out = '';
   for (let i = 0; i < length; i++) {
-    out += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    out += ALPHABET[randomInt(ALPHABET.length)];
   }
   return out;
 }
@@ -520,6 +526,19 @@ describe('url shortener API', () => {
     const app = createServer(':memory:');
     const res = await request(app).post('/links').send({ targetUrl: 'http://example.com/page' });
     expect(res.status).toBe(201);
+  });
+
+  it('generates codes from the expected alphabet, not predictably repeating', async () => {
+    const app = createServer(':memory:');
+    const codes = new Set<string>();
+    for (let i = 0; i < 10; i++) {
+      const res = await request(app).post('/links').send({ targetUrl: 'https://example.com' });
+      expect(res.body.code).toMatch(/^[0-9a-zA-Z]{7}$/);
+      codes.add(res.body.code);
+    }
+    // Not a statistical randomness test -- just guards against a regression
+    // to something deterministic/repeating (e.g. an unseeded counter).
+    expect(codes.size).toBe(10);
   });
 
   it('returns 404 for an unknown short code', async () => {

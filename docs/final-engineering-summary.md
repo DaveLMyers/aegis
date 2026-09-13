@@ -43,7 +43,7 @@ gitignored, not committed; see "Nothing is pre-baked" in
   self-contained `report.html` dashboard (reliability metrics as
   color-coded stat cards, no server or build step needed) locally under
   `scenarios/runs/` (not committed -- run it to see it).
-- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 98 tests
+- **Tests** (`tests/orchestrator/`, `tests/target-project/`) -- 99 tests
   covering gates, retry, rollback, parallel synchronization, re-planning,
   policy enforcement, computed reliability metrics, and the shortener's API
   behavior (including its input-validation/security guards).
@@ -596,14 +596,20 @@ and a malformed date are both rejected with 400 while a legitimate
 (`curl`) confirming the same three cases; and the full 98-test suite plus a
 fresh 3-scenario regression, both green.
 
-**Not fixed, and staying a documented, deliberate simplification rather
-than an oversight**: short codes are generated with `Math.random()`
-(`codeGen.ts`), which is fine for basic collision avoidance in a prototype
-but not a cryptographically secure source of randomness -- if codes were
-ever meant to resist enumeration/guessing, this is the wrong tool. There is
-still no auth/ownership model (already a stated assumption from the
-`requirements` stage, not new). Both are real, known trade-offs for a
-prototype at this scope, not silently unaddressed gaps.
+**Closed in a follow-up pass, same review**: short codes were generated
+with `Math.random()` (`codeGen.ts`), which is fine for basic collision
+avoidance but not a cryptographically secure source of randomness -- since
+codes are public identifiers reachable by anyone who has one, a predictable
+generator makes other users' codes guessable/enumerable. Switched to
+`node:crypto`'s `randomInt`, no new dependency. Verified with a new test
+asserting 10 generated codes are all distinct and match the expected
+alphabet/length -- not a statistical randomness proof, but a real guard
+against a regression to something deterministic.
+
+**Still a documented, deliberate simplification, not an oversight**: there
+is no auth/ownership model (already a stated assumption from the
+`requirements` stage, not new) -- a real, known trade-off for a prototype
+at this scope, not a silently unaddressed gap.
 
 ## Limitations
 
