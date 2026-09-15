@@ -611,6 +611,101 @@ is no auth/ownership model (already a stated assumption from the
 `requirements` stage, not new) -- a real, known trade-off for a prototype
 at this scope, not a silently unaddressed gap.
 
+## Closed since: findings from an independent blind code review
+
+The prior two review passes were done directly, reading the code by hand.
+This one used a different method entirely: a fresh subagent, with no
+knowledge of this project's prior conversation or findings, given only the
+actual generated code and the three original requirement texts, asked to
+review it cold -- the same principle `AGENT_MODE=llm`'s independent
+`review` stage already formalizes (a genuinely separate pass that can't
+inherit the implementer's blind spots), run manually as a stand-in since
+that mode needs a paid API key this project isn't funding.
+
+It found real issues neither manual pass had:
+
+1. **The tiered rate limiter didn't actually satisfy the brownfield
+   requirement.** It was mounted at `/:code` in `server.ts`, which also
+   matches `POST /links` (`links` itself satisfies the `:code` pattern) --
+   so link *creation* was being treated as a lookup for a link named
+   "links" (always missing, always falling back to standard tier) instead
+   of being exempt entirely. Fixed with an explicit method check in
+   `rateLimit.ts`: non-GET requests skip the tiered limiter now, since no
+   link (and therefore no tier) exists yet at creation time.
+2. **The "decoupled hot path" claim in this very document wasn't true.**
+   `EventEmitter.emit()` is synchronous, so an uncaught error inside the
+   click consumer previously propagated straight back through
+   `publishClick()` into the redirect handler that called it -- a busy or
+   locked database would 500 the visitor being redirected instead of
+   analytics failing silently and separately, the opposite of what the
+   split was supposed to buy. Fixed with a try/catch around the insert.
+   Also fixed in the same function: `clickEvents` is a module-level bus,
+   so calling `createServer()` more than once in a process (exactly what
+   the test suite does) left every prior listener attached, double- or
+   triple-writing each click across every server's own database --
+   `removeAllListeners('click')` before attaching a new one makes the most
+   recently created server authoritative for the process.
+3. **`alias` had no validation at all**, unlike `targetUrl` and
+   `expiresAt`. `{"alias":"health"}` was accepted (201) and then
+   permanently unreachable, since `/health` always wins; a non-string
+   alias reached the database driver and threw a raw, unhandled error; and
+   characters like `/` or `?` produced a link `GET /:code` could never
+   match. Fixed with `isValidAlias` in `validation.ts` -- url-safe
+   characters, a length cap, and a reserved-word check.
+4. **No terminal error handler.** Any uncaught synchronous throw (the
+   `alias` bug above, a malformed JSON body, a database constraint
+   violation) fell through to Express's default handler, which returns the
+   actual stack trace in the response body outside production. Fixed with
+   a terminal error-handling middleware in both `server.ts` variants that
+   logs server-side and returns a generic 500.
+5. **The referrer-breakdown query was unbounded and had a sentinel
+   collision.** No `LIMIT`, so a link with many distinct referrers
+   returned an arbitrarily large payload; `COALESCE(referrer, 'direct')`
+   meant a page whose actual `Referer` header happened to be the literal
+   string "direct" would merge with the null-referrer bucket. Fixed:
+   `LIMIT 20`, sentinel changed to `'(direct)'`.
+6. **Missing index on `click_events(code)`.** Every stats request did full
+   table scans across *all* links' click history, growing with total
+   traffic rather than per-link traffic. Fixed:
+   `CREATE INDEX IF NOT EXISTS idx_click_events_code_ts ON click_events(code, ts)`.
+7. **The rate-limit `hits` map was never pruned.** An IP that hit once and
+   never returned lingered in memory for the life of the process. Fixed
+   with a periodic sweep (`setInterval`, `unref()`'d so it can't keep a
+   process or test run alive on its own) removing stale entries.
+8. **`expiresAt` was stored verbatim, so expiry depended on the server's
+   timezone.** An offset-less input like `"2026-12-31T00:00:00"` parses as
+   *server local time* on every later read; the same stored value could
+   mean a different expiry moment depending on which machine reads it.
+   Fixed: normalized to a fixed-offset ISO string on write.
+9. Also fixed: no `Cache-Control: no-store` on the redirect (an
+   intermediary could cache it and silently undercount clicks).
+
+**Explicitly not fixed, with reasoning, not silently dropped:**
+- **`req.ip` with no explicit `trust proxy` decision.** Genuinely
+  deployment-topology-dependent (behind a proxy vs. not) -- the correct
+  answer isn't code, it's an explicit decision a real deployment would
+  need to make, which this prototype doesn't have enough context to make
+  for it. Documented here rather than guessed at.
+- **TOCTOU on alias/code uniqueness** (check-then-insert, no transaction).
+  Safe within a single process (better-sqlite3 is synchronous); only
+  matters if two processes share one `AEGIS_DB_PATH`, which this
+  prototype doesn't do. Real but low-impact today, per the review's own
+  confidence rating.
+- **Expired links still serve full stats, including the referrer
+  breakdown.** Considered and kept as-is deliberately: expiry governs
+  whether the redirect still works, not whether historical analytics
+  remain visible -- a defensible product decision, not an oversight.
+- **`db.prepare()` recompiled per-request** in several hot paths rather
+  than prepared once and reused (the pattern `analytics.ts` already uses
+  correctly). Real, low-impact per the review's own rating; deferred as a
+  minor optimization rather than a correctness or security fix.
+
+Verified: full 3-scenario regression clean, 99/99 tests still passing, and
+the specific fixes checked live against the running API (rejecting a
+`"health"` alias, rejecting bad characters, confirming creation requests
+are no longer mis-throttled, confirming `expiresAt` normalizes correctly,
+confirming the `Cache-Control` header is present on redirects).
+
 ## Limitations
 
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic
