@@ -61,23 +61,54 @@ review" in [architecture.md](./architecture.md).
 
 ## Run the target-project API directly
 
+**This is a real, standalone, independently deployable service, not just a
+demo artifact of the orchestrator.** Once generated (run the three
+scenarios in order first -- see below), `src/target-project/` has zero
+runtime dependency on `src/orchestrator/`: every file in it imports only
+from each other and from npm packages (`express`, `better-sqlite3`,
+`node:crypto`). Verify this yourself: `grep -r "orchestrator" src/target-project/`
+returns nothing. AEGIS is what *builds* it; the shipped service doesn't
+carry AEGIS around at runtime. If you wanted to deploy this independently
+of AEGIS entirely, `src/target-project/` is the whole thing you'd deploy --
+a Dockerfile, a process manager, whatever fits, exactly like any other
+Node service.
+
 ```bash
 npm run start:api
 ```
 
 ```bash
+# Basic create/redirect/stats:
 curl -X POST localhost:3000/links -H "Content-Type: application/json" \
   -d '{"targetUrl":"https://example.com"}'
-# => {"code":"abc1234","targetUrl":"https://example.com",...}
+# => {"code":"abc1234","targetUrl":"https://example.com","clientTier":"standard",...}
 
 curl -i localhost:3000/abc1234           # 302 redirect + records a click
-curl localhost:3000/abc1234/stats        # click count, last-click time (+ referrer breakdown if premium tier)
+curl localhost:3000/abc1234/stats        # click count, last-click time
+
+# Premium tier + the referrer breakdown that's absent for standard tier:
+curl -X POST localhost:3000/links -H "Content-Type: application/json" \
+  -d '{"targetUrl":"https://example.com","clientTier":"premium"}'
+curl -i localhost:3000/<premium-code> -H "Referer: https://example.org"
+curl localhost:3000/<premium-code>/stats
+# => includes "referrerBreakdown": [{"referrer":"https://example.org","count":1}]
+
+# Input validation actually rejecting bad input, not just accepting anything:
+curl -X POST localhost:3000/links -H "Content-Type: application/json" \
+  -d '{"targetUrl":"javascript:alert(1)"}'    # => 400, not a stored open-redirect
+curl -X POST localhost:3000/links -H "Content-Type: application/json" \
+  -d '{"targetUrl":"https://example.com","alias":"health"}'  # => 400, not a silently dead link
 ```
 
 The full request/response contract for all three endpoints is a real
 OpenAPI 3.0 document at `src/target-project/openapi.yaml`, generated (and
 updated) by the `documentation` stage of whichever scenario you last ran --
-not a hand-written static file.
+not a hand-written static file. This code has also been through two
+rounds of independent, blind code review -- see "Closed since: findings
+from an independent blind code review" (and the follow-up second-round
+entry after it) in
+[final-engineering-summary.md](./final-engineering-summary.md) for exactly
+what was checked and fixed.
 
 ## Run the tests
 
