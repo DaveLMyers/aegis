@@ -706,6 +706,88 @@ the specific fixes checked live against the running API (rejecting a
 are no longer mis-throttled, confirming `expiresAt` normalizes correctly,
 confirming the `Cache-Control` header is present on redirects).
 
+## Closed since: a second independent blind review, on the fixed code
+
+A genuinely valuable result from running the same process twice: the
+second review, given the *already-fixed* code cold with no memory of the
+first, found that one of the first round's own fixes was itself
+incomplete -- exactly the case for running this more than once rather than
+treating one pass as sufficient.
+
+**The important one**: the round-1 fix for the rate-limiter mounting bug
+excluded anything that wasn't exactly `GET`. Express dispatches `HEAD`
+requests to a registered `GET` handler by default, though, so `HEAD
+/:code` was still reaching the real redirect handler -- database lookup,
+click tracking, all of it -- while being treated as "not GET" and
+skipping the rate limiter entirely. A complete, silent bypass of the
+brownfield requirement this fix was supposed to close. Fixed properly:
+`GET` and `HEAD` are both rate-limited now (both reach the real handler);
+only `POST` is exempted from the tiered check, since it has its own limit
+instead (see next).
+
+**Also found and fixed:**
+- **`POST /links` had no rate limit at all** after the round-1 fix removed
+  the tiered limiter's incorrect match on it, without replacing it with
+  anything. Added a separate flat creation limit (30/min/IP, its own
+  bucket, independent of the tier-based ones), since no link -- and
+  therefore no tier -- exists yet at that point in the request.
+- **The rate-limit `hits` map was module-level**, same class of bug as
+  the analytics one fixed in the prior round: multiple server instances
+  in one process (what the test suite creates) silently shared one
+  rate-limit table. `hits` and its sweep are now created fresh inside
+  `createTieredRateLimit`, one per server instance.
+- **The error handler always returned 500**, even for a genuine client
+  error -- `express.json()` reports malformed or oversized request bodies
+  as its own 400/413, which the handler was unconditionally overwriting.
+  Now passes through a real 4xx from the underlying error instead of
+  masking every failure as "internal server error."
+- **Raw `Referer` header values were stored verbatim** -- attacker-
+  controlled up to ~16KB per click, and real referrer URLs routinely carry
+  session tokens or search terms in their query string that a click-count
+  breakdown has no reason to retain. Added `normalizeReferrer()`,
+  reducing every stored value to just its origin (scheme + host).
+- **A real type error, found by finally typechecking against genuinely
+  fresh output.** `isValidAlias`'s type predicate narrows `alias` to
+  `string | undefined`, but `routes.ts` declared `let code: string =
+  alias` -- `undefined` isn't assignable to `string`. This had been
+  latent since the round-1 fix that introduced `isValidAlias`, undetected
+  because `tsc --noEmit` was run *before* regenerating the target-project
+  files that round, so it checked stale pre-fix output rather than the
+  code actually being shipped. A real process mistake, not just a code
+  one -- worth stating plainly rather than glossing over. Fixed the type
+  (`let code: string | undefined`) and the process (regenerate before
+  typechecking, every time, no exceptions).
+
+**Found again, independently, by both reviews -- discussed, not
+re-dismissed**: tier is resolved from the *link* being accessed, not from
+any concept of "the calling client," since there's no auth/account system
+in this prototype (an explicit, stated assumption from the `requirements`
+stage). Both reviews flagged the same consequence: a caller can spend a
+combined budget by hitting links of both tiers. This is being kept as a
+documented, deliberate limitation tied to the no-auth trade-off rather
+than reworked into a real client-identity model, which would be a
+schema-level change well beyond this prototype's scope -- but it's now
+flagged twice, independently, which is worth being ready to discuss
+directly rather than treat as settled.
+
+**Explicitly not fixed, with reasoning**: no real schema-migration path
+(`CREATE TABLE IF NOT EXISTS` cannot add a column to an existing database
+file). Worth being precise about the actual exposure here: this is
+already mitigated *within* AEGIS's own orchestrated flow specifically --
+`brownfield.ts`'s `implementation` stage resets the dev database file
+before applying a schema-changing template, for exactly this reason. It's
+a real gap only for someone deploying the shortener standalone, outside
+AEGIS's own playbook-driven flow -- a real product would need an actual
+migration tool, which is a meaningfully larger addition than fits this
+pass.
+
+Verified the same way as the first round: full 3-scenario regression
+clean, 99/99 tests passing, and the specific fixes checked live against
+the running API -- including a direct proof the `HEAD` bypass is closed
+(65 `HEAD` requests against a fresh link produced exactly 5 rejections,
+matching the standard-tier 60/min limit precisely) and that creation's
+new flat limit rejects correctly once its own budget is spent.
+
 ## Limitations
 
 - **Fallback playbooks aren't meaningfully degraded.** The deterministic

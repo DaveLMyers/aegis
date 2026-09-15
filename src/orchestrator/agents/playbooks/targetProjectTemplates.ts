@@ -119,6 +119,25 @@ export interface ClickEvent {
   referrer: string | null;
 }
 
+/**
+ * Reduces a Referer header to just its origin (scheme + host) rather than
+ * storing it verbatim. Found by an independent code review: the raw header
+ * is attacker-controlled up to Node's header-size limit (~16KB) -- cheap
+ * database bloat -- and full referrer URLs routinely carry query strings
+ * with session tokens, search terms, or internal hostnames a click-tracking
+ * table has no reason to retain. The origin is what "which site sent this
+ * traffic" actually means for a breakdown.
+ */
+export function normalizeReferrer(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return \`\${url.protocol}//\${url.host}\`;
+  } catch {
+    return null;
+  }
+}
+
 export const clickEvents = new EventEmitter();
 
 export function publishClick(event: ClickEvent): void {
@@ -204,14 +223,10 @@ const LIMITS_BY_TIER: Record<string, number> = {
   premium: 600,
 };
 
-const hits = new Map<string, { count: number; windowStart: number }>();
-
-setInterval(() => {
-  const cutoff = Date.now() - WINDOW_MS;
-  for (const [key, entry] of hits) {
-    if (entry.windowStart < cutoff) hits.delete(key);
-  }
-}, WINDOW_MS).unref();
+// A flat cap on link creation -- its own bucket, separate from the
+// tier-based ones below, since no link (and therefore no tier) exists yet
+// at that point in the request.
+const CREATE_LIMIT = 30;
 
 /**
  * Tiered rate limiting: premium/partner clients get a materially higher
@@ -219,18 +234,51 @@ setInterval(() => {
  * the link's client_tier column, since that's the unit the API already
  * reasons about (no separate auth/account system exists in this prototype).
  *
- * Mounted app-wide at '/:code' in server.ts (so it can resolve tier before
- * the route handler runs) -- but that path pattern also matches POST
- * /links, which isn't a code lookup at all. Found by an independent code
- * review: creation requests were silently being treated as a lookup for a
- * link named "links" (always missing, so always falling back to standard
- * tier) instead of being exempt. Explicit method check below fixes it;
- * creation is intentionally not tier-limited here, since no link (and
- * therefore no tier) exists yet at that point in the request.
+ * Mounted app-wide at '/:code' in server.ts -- but that path pattern also
+ * matches POST /links. Two rounds of independent review found real bugs
+ * here in turn: round 1, creation was silently treated as a lookup for a
+ * link named "links" -- "fixed" by excluding anything that wasn't exactly
+ * GET. Round 2 found that fix was itself a silent, complete bypass:
+ * Express dispatches HEAD to a registered GET handler by default, so
+ * "HEAD /:code" reached the real handler while skipping the limiter
+ * entirely. Also found: creation ended up with no rate limit at all, and
+ * hits was module-level, so multiple server instances in one process
+ * silently shared one rate-limit table. Fixed properly here: GET and HEAD
+ * are both rate-limited; POST gets its own flat creation limit; hits and
+ * its sweep are created fresh per call, not at module scope.
  */
 export function createTieredRateLimit(db: AegisDb) {
+  const hits = new Map<string, { count: number; windowStart: number }>();
+  const sweep = setInterval(() => {
+    const cutoff = Date.now() - WINDOW_MS;
+    for (const [key, entry] of hits) {
+      if (entry.windowStart < cutoff) hits.delete(key);
+    }
+  }, WINDOW_MS);
+  sweep.unref();
+
+  function checkLimit(key: string, limit: number): boolean {
+    const now = Date.now();
+    const entry = hits.get(key);
+    if (!entry || now - entry.windowStart > WINDOW_MS) {
+      hits.set(key, { count: 1, windowStart: now });
+      return true;
+    }
+    entry.count += 1;
+    return entry.count <= limit;
+  }
+
   return function tieredRateLimit(req: Request, res: Response, next: NextFunction): void {
-    if (req.method !== 'GET') {
+    if (req.method === 'POST') {
+      const key = \`create:\${req.ip ?? 'unknown'}\`;
+      if (!checkLimit(key, CREATE_LIMIT)) {
+        res.status(429).json({ error: 'rate limit exceeded for link creation', limit: CREATE_LIMIT });
+        return;
+      }
+      next();
+      return;
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
       next();
       return;
     }
@@ -244,15 +292,7 @@ export function createTieredRateLimit(db: AegisDb) {
     }
     const limit = LIMITS_BY_TIER[tier] ?? LIMITS_BY_TIER.standard;
     const key = \`\${req.ip ?? 'unknown'}:\${tier}\`;
-    const now = Date.now();
-    const entry = hits.get(key);
-    if (!entry || now - entry.windowStart > WINDOW_MS) {
-      hits.set(key, { count: 1, windowStart: now });
-      next();
-      return;
-    }
-    entry.count += 1;
-    if (entry.count > limit) {
+    if (!checkLimit(key, limit)) {
       res.status(429).json({ error: \`rate limit exceeded for \${tier} tier\`, tier, limit });
       return;
     }
@@ -315,7 +355,7 @@ export function isValidAlias(value: unknown): value is string | undefined {
 export const ROUTES_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
-import { publishClick } from './analytics.js';
+import { publishClick, normalizeReferrer } from './analytics.js';
 import { isValidTargetUrl, isValidExpiresAt, isValidAlias } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
@@ -340,7 +380,7 @@ export function createLinksRouter(db: AegisDb): Router {
     // local time on every later read, so the same stored value could mean
     // a different expiry moment depending on which machine reads it.
     const normalizedExpiresAt = expiresAt ? new Date(expiresAt).toISOString() : null;
-    let code: string = alias;
+    let code: string | undefined = alias;
     if (code) {
       const existing = db.prepare('SELECT 1 FROM links WHERE code = ?').get(code);
       if (existing) {
@@ -372,7 +412,7 @@ export function createLinksRouter(db: AegisDb): Router {
       res.status(410).json({ error: 'short link has expired' });
       return;
     }
-    publishClick({ code: link.code, ts: new Date().toISOString(), referrer: req.get('referer') ?? null });
+    publishClick({ code: link.code, ts: new Date().toISOString(), referrer: normalizeReferrer(req.get('referer')) });
     // Without this, an intermediary (CDN, browser) could cache the 302 and
     // serve it on a later visit without ever hitting this handler again --
     // silently undercounting clicks.
@@ -403,7 +443,7 @@ export function createLinksRouter(db: AegisDb): Router {
 export const ROUTES_TIERED_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
-import { publishClick } from './analytics.js';
+import { publishClick, normalizeReferrer } from './analytics.js';
 import { isValidTargetUrl, isValidExpiresAt, isValidAlias } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
@@ -424,7 +464,7 @@ export function createLinksRouter(db: AegisDb): Router {
       return;
     }
     const normalizedExpiresAt = expiresAt ? new Date(expiresAt).toISOString() : null;
-    let code: string = alias;
+    let code: string | undefined = alias;
     if (code) {
       const existing = db.prepare('SELECT 1 FROM links WHERE code = ?').get(code);
       if (existing) {
@@ -454,7 +494,7 @@ export function createLinksRouter(db: AegisDb): Router {
       res.status(410).json({ error: 'short link has expired' });
       return;
     }
-    publishClick({ code: link.code, ts: new Date().toISOString(), referrer: req.get('referer') ?? null });
+    publishClick({ code: link.code, ts: new Date().toISOString(), referrer: normalizeReferrer(req.get('referer')) });
     res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, link.target_url);
   });
@@ -516,10 +556,17 @@ export function createServer(dbPath?: string) {
   // in a route handler (malformed JSON body, a database constraint
   // violation) falls through to Express's default handler, which returns
   // the actual stack trace in the response body outside production --
-  // found by an independent code review.
+  // found by an independent code review. A second review caught that the
+  // first version of this handler always returned 500, even for a genuine
+  // client error like malformed JSON (which express.json() reports as a
+  // 400) -- body-parser's own .status/.statusCode is passed through for
+  // real 4xx errors instead of being overwritten.
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('unhandled request error', err);
-    res.status(500).json({ error: 'internal server error' });
+    const reported = (err as { status?: number; statusCode?: number } | null)?.status
+      ?? (err as { status?: number; statusCode?: number } | null)?.statusCode;
+    const isClientError = typeof reported === 'number' && reported >= 400 && reported < 500;
+    res.status(isClientError ? reported : 500).json({ error: isClientError ? 'invalid request' : 'internal server error' });
   });
 
   return app;
@@ -559,10 +606,17 @@ export function createServer(dbPath?: string) {
   // in a route handler (malformed JSON body, a database constraint
   // violation) falls through to Express's default handler, which returns
   // the actual stack trace in the response body outside production --
-  // found by an independent code review.
+  // found by an independent code review. A second review caught that the
+  // first version of this handler always returned 500, even for a genuine
+  // client error like malformed JSON (which express.json() reports as a
+  // 400) -- body-parser's own .status/.statusCode is passed through for
+  // real 4xx errors instead of being overwritten.
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('unhandled request error', err);
-    res.status(500).json({ error: 'internal server error' });
+    const reported = (err as { status?: number; statusCode?: number } | null)?.status
+      ?? (err as { status?: number; statusCode?: number } | null)?.statusCode;
+    const isClientError = typeof reported === 'number' && reported >= 400 && reported < 500;
+    res.status(isClientError ? reported : 500).json({ error: isClientError ? 'invalid request' : 'internal server error' });
   });
 
   return app;
@@ -667,7 +721,7 @@ describe('url shortener API', () => {
 export const ROUTES_TIERED_ANALYTICS_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
-import { publishClick } from './analytics.js';
+import { publishClick, normalizeReferrer } from './analytics.js';
 import { isValidTargetUrl, isValidExpiresAt, isValidAlias } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
@@ -688,7 +742,7 @@ export function createLinksRouter(db: AegisDb): Router {
       return;
     }
     const normalizedExpiresAt = expiresAt ? new Date(expiresAt).toISOString() : null;
-    let code: string = alias;
+    let code: string | undefined = alias;
     if (code) {
       const existing = db.prepare('SELECT 1 FROM links WHERE code = ?').get(code);
       if (existing) {
@@ -718,7 +772,7 @@ export function createLinksRouter(db: AegisDb): Router {
       res.status(410).json({ error: 'short link has expired' });
       return;
     }
-    publishClick({ code: link.code, ts: new Date().toISOString(), referrer: req.get('referer') ?? null });
+    publishClick({ code: link.code, ts: new Date().toISOString(), referrer: normalizeReferrer(req.get('referer')) });
     res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, link.target_url);
   });
