@@ -33,6 +33,7 @@ export function createDb(path: string = process.env.AEGIS_DB_PATH ?? DEFAULT_DB_
       ts TEXT NOT NULL,
       referrer TEXT
     );
+    CREATE INDEX IF NOT EXISTS idx_click_events_code_ts ON click_events(code, ts);
   \`);
   return db;
 }
@@ -73,6 +74,7 @@ export function createDb(path: string = process.env.AEGIS_DB_PATH ?? DEFAULT_DB_
       ts TEXT NOT NULL,
       referrer TEXT
     );
+    CREATE INDEX IF NOT EXISTS idx_click_events_code_ts ON click_events(code, ts);
   \`);
   return db;
 }
@@ -128,11 +130,31 @@ export function publishClick(event: ClickEvent): void {
  * redirect handler only has to publish an event, not write to the database
  * inline, which mirrors how the shared-data-services org models "standardize
  * how data is served to others" even at this small scale.
+ *
+ * Two things found by an independent blind code review, fixed here:
+ * removeAllListeners() before attaching a new one -- clickEvents is a
+ * module-level bus, so calling createServer() more than once in a process
+ * (as the test suite does) previously left every prior listener attached,
+ * double- (or triple-) writing each click into every server's own database.
+ * This makes the most-recently-created server's database authoritative for
+ * the process, correct for this prototype's single-instance-per-process
+ * usage; a genuinely concurrent multi-instance deployment would need a
+ * per-instance bus instead. And the try/catch: EventEmitter.emit() is
+ * synchronous, so an uncaught insert error here previously propagated
+ * straight back through publishClick() into the redirect handler that
+ * called it -- turning a busy/locked database into a 500 for the visitor
+ * being redirected, exactly the hot-path failure this split was meant to
+ * avoid.
  */
 export function startClickConsumer(db: AegisDb): void {
   const insert = db.prepare('INSERT INTO click_events (code, ts, referrer) VALUES (@code, @ts, @referrer)');
+  clickEvents.removeAllListeners('click');
   clickEvents.on('click', (event: ClickEvent) => {
-    insert.run(event);
+    try {
+      insert.run(event);
+    } catch (err) {
+      console.error('failed to record click event', err);
+    }
   });
 }
 `;
@@ -142,6 +164,17 @@ export const RATE_LIMIT_TS = `import type { NextFunction, Request, Response } fr
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 60;
 const hits = new Map<string, { count: number; windowStart: number }>();
+
+// An entry for an IP that hits once and never returns lingers forever --
+// found by an independent code review. A periodic sweep bounds the map's
+// size instead of letting it grow for the life of the process; unref() so
+// this timer never keeps the process (or a test run) alive on its own.
+setInterval(() => {
+  const cutoff = Date.now() - WINDOW_MS;
+  for (const [key, entry] of hits) {
+    if (entry.windowStart < cutoff) hits.delete(key);
+  }
+}, WINDOW_MS).unref();
 
 export function rateLimit(req: Request, res: Response, next: NextFunction): void {
   const key = req.ip ?? 'unknown';
@@ -173,14 +206,34 @@ const LIMITS_BY_TIER: Record<string, number> = {
 
 const hits = new Map<string, { count: number; windowStart: number }>();
 
+setInterval(() => {
+  const cutoff = Date.now() - WINDOW_MS;
+  for (const [key, entry] of hits) {
+    if (entry.windowStart < cutoff) hits.delete(key);
+  }
+}, WINDOW_MS).unref();
+
 /**
  * Tiered rate limiting: premium/partner clients get a materially higher
  * request budget than standard clients. Tier is resolved per short code from
  * the link's client_tier column, since that's the unit the API already
  * reasons about (no separate auth/account system exists in this prototype).
+ *
+ * Mounted app-wide at '/:code' in server.ts (so it can resolve tier before
+ * the route handler runs) -- but that path pattern also matches POST
+ * /links, which isn't a code lookup at all. Found by an independent code
+ * review: creation requests were silently being treated as a lookup for a
+ * link named "links" (always missing, so always falling back to standard
+ * tier) instead of being exempt. Explicit method check below fixes it;
+ * creation is intentionally not tier-limited here, since no link (and
+ * therefore no tier) exists yet at that point in the request.
  */
 export function createTieredRateLimit(db: AegisDb) {
   return function tieredRateLimit(req: Request, res: Response, next: NextFunction): void {
+    if (req.method !== 'GET') {
+      next();
+      return;
+    }
     const code = req.params.code as string | undefined;
     let tier = 'standard';
     if (code) {
@@ -239,13 +292,31 @@ export function isValidExpiresAt(value: unknown): value is string | undefined {
   if (typeof value !== 'string') return false;
   return !Number.isNaN(new Date(value).getTime());
 }
+
+const RESERVED_ALIASES = new Set(['health']);
+
+/**
+ * Restricts a custom alias to url-path-safe characters with a sane length
+ * cap, and blocks any word that would collide with a real route. Found by
+ * an independent code review: alias was previously completely unvalidated
+ * -- {"alias":"health"} was accepted (201) and then permanently
+ * unreachable since /health always wins; a non-string alias (e.g. an
+ * object) reached the database driver and threw a raw 500; and characters
+ * like "/" or "?" produced a link GET /:code could never actually match.
+ */
+export function isValidAlias(value: unknown): value is string | undefined {
+  if (value === undefined || value === null || value === '') return true;
+  if (typeof value !== 'string' || value.length > 64) return false;
+  if (!/^[a-zA-Z0-9_-]+$/.test(value)) return false;
+  return !RESERVED_ALIASES.has(value.toLowerCase());
+}
 `;
 
 export const ROUTES_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
 import { publishClick } from './analytics.js';
-import { isValidTargetUrl, isValidExpiresAt } from './validation.js';
+import { isValidTargetUrl, isValidExpiresAt, isValidAlias } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
   const router = Router();
@@ -260,6 +331,15 @@ export function createLinksRouter(db: AegisDb): Router {
       res.status(400).json({ error: 'expiresAt must be a valid date string if provided' });
       return;
     }
+    if (!isValidAlias(alias)) {
+      res.status(400).json({ error: 'alias must be url-safe characters only (letters, numbers, - or _), 64 chars max' });
+      return;
+    }
+    // Normalized to a fixed-offset ISO string on write -- an offset-less
+    // input like "2026-09-14T00:00:00" otherwise parses as the *server's*
+    // local time on every later read, so the same stored value could mean
+    // a different expiry moment depending on which machine reads it.
+    const normalizedExpiresAt = expiresAt ? new Date(expiresAt).toISOString() : null;
     let code: string = alias;
     if (code) {
       const existing = db.prepare('SELECT 1 FROM links WHERE code = ?').get(code);
@@ -275,9 +355,9 @@ export function createLinksRouter(db: AegisDb): Router {
       code,
       targetUrl,
       createdAt,
-      expiresAt ?? null,
+      normalizedExpiresAt,
     );
-    res.status(201).json({ code, targetUrl, createdAt, expiresAt: expiresAt ?? null });
+    res.status(201).json({ code, targetUrl, createdAt, expiresAt: normalizedExpiresAt });
   });
 
   router.get('/:code', (req, res) => {
@@ -293,6 +373,10 @@ export function createLinksRouter(db: AegisDb): Router {
       return;
     }
     publishClick({ code: link.code, ts: new Date().toISOString(), referrer: req.get('referer') ?? null });
+    // Without this, an intermediary (CDN, browser) could cache the 302 and
+    // serve it on a later visit without ever hitting this handler again --
+    // silently undercounting clicks.
+    res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, link.target_url);
   });
 
@@ -320,7 +404,7 @@ export const ROUTES_TIERED_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
 import { publishClick } from './analytics.js';
-import { isValidTargetUrl, isValidExpiresAt } from './validation.js';
+import { isValidTargetUrl, isValidExpiresAt, isValidAlias } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
   const router = Router();
@@ -335,6 +419,11 @@ export function createLinksRouter(db: AegisDb): Router {
       res.status(400).json({ error: 'expiresAt must be a valid date string if provided' });
       return;
     }
+    if (!isValidAlias(alias)) {
+      res.status(400).json({ error: 'alias must be url-safe characters only (letters, numbers, - or _), 64 chars max' });
+      return;
+    }
+    const normalizedExpiresAt = expiresAt ? new Date(expiresAt).toISOString() : null;
     let code: string = alias;
     if (code) {
       const existing = db.prepare('SELECT 1 FROM links WHERE code = ?').get(code);
@@ -349,8 +438,8 @@ export function createLinksRouter(db: AegisDb): Router {
     const tier = clientTier === 'premium' ? 'premium' : 'standard';
     db.prepare(
       'INSERT INTO links (code, target_url, client_tier, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(code, targetUrl, tier, createdAt, expiresAt ?? null);
-    res.status(201).json({ code, targetUrl, clientTier: tier, createdAt, expiresAt: expiresAt ?? null });
+    ).run(code, targetUrl, tier, createdAt, normalizedExpiresAt);
+    res.status(201).json({ code, targetUrl, clientTier: tier, createdAt, expiresAt: normalizedExpiresAt });
   });
 
   router.get('/:code', (req, res) => {
@@ -366,6 +455,7 @@ export function createLinksRouter(db: AegisDb): Router {
       return;
     }
     publishClick({ code: link.code, ts: new Date().toISOString(), referrer: req.get('referer') ?? null });
+    res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, link.target_url);
   });
 
@@ -421,6 +511,17 @@ export function createServer(dbPath?: string) {
   app.use(express.json());
   app.use(rateLimit);
   app.use('/', createLinksRouter(db));
+
+  // Terminal error handler -- without this, any uncaught synchronous throw
+  // in a route handler (malformed JSON body, a database constraint
+  // violation) falls through to Express's default handler, which returns
+  // the actual stack trace in the response body outside production --
+  // found by an independent code review.
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('unhandled request error', err);
+    res.status(500).json({ error: 'internal server error' });
+  });
+
   return app;
 }
 `;
@@ -453,6 +554,17 @@ export function createServer(dbPath?: string) {
   app.use(express.json());
   app.use('/:code', createTieredRateLimit(db));
   app.use('/', createLinksRouter(db));
+
+  // Terminal error handler -- without this, any uncaught synchronous throw
+  // in a route handler (malformed JSON body, a database constraint
+  // violation) falls through to Express's default handler, which returns
+  // the actual stack trace in the response body outside production --
+  // found by an independent code review.
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('unhandled request error', err);
+    res.status(500).json({ error: 'internal server error' });
+  });
+
   return app;
 }
 `;
@@ -556,7 +668,7 @@ export const ROUTES_TIERED_ANALYTICS_TS = `import { Router } from 'express';
 import type { AegisDb } from './db.js';
 import { generateUniqueCode } from './codeGen.js';
 import { publishClick } from './analytics.js';
-import { isValidTargetUrl, isValidExpiresAt } from './validation.js';
+import { isValidTargetUrl, isValidExpiresAt, isValidAlias } from './validation.js';
 
 export function createLinksRouter(db: AegisDb): Router {
   const router = Router();
@@ -571,6 +683,11 @@ export function createLinksRouter(db: AegisDb): Router {
       res.status(400).json({ error: 'expiresAt must be a valid date string if provided' });
       return;
     }
+    if (!isValidAlias(alias)) {
+      res.status(400).json({ error: 'alias must be url-safe characters only (letters, numbers, - or _), 64 chars max' });
+      return;
+    }
+    const normalizedExpiresAt = expiresAt ? new Date(expiresAt).toISOString() : null;
     let code: string = alias;
     if (code) {
       const existing = db.prepare('SELECT 1 FROM links WHERE code = ?').get(code);
@@ -585,8 +702,8 @@ export function createLinksRouter(db: AegisDb): Router {
     const tier = clientTier === 'premium' ? 'premium' : 'standard';
     db.prepare(
       'INSERT INTO links (code, target_url, client_tier, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(code, targetUrl, tier, createdAt, expiresAt ?? null);
-    res.status(201).json({ code, targetUrl, clientTier: tier, createdAt, expiresAt: expiresAt ?? null });
+    ).run(code, targetUrl, tier, createdAt, normalizedExpiresAt);
+    res.status(201).json({ code, targetUrl, clientTier: tier, createdAt, expiresAt: normalizedExpiresAt });
   });
 
   router.get('/:code', (req, res) => {
@@ -602,6 +719,7 @@ export function createLinksRouter(db: AegisDb): Router {
       return;
     }
     publishClick({ code: link.code, ts: new Date().toISOString(), referrer: req.get('referer') ?? null });
+    res.setHeader('Cache-Control', 'no-store');
     res.redirect(302, link.target_url);
   });
 
@@ -629,9 +747,14 @@ export function createLinksRouter(db: AegisDb): Router {
       res.json(base);
       return;
     }
+    // LIMIT bounds the response size for a link with many distinct
+    // referrers instead of returning an unbounded list; '(direct)' (not
+    // 'direct') as the null-referrer sentinel avoids colliding with a page
+    // whose actual Referer header happens to be the literal word "direct" --
+    // both found by an independent code review.
     const referrerBreakdown = db
       .prepare(
-        "SELECT COALESCE(referrer, 'direct') as referrer, COUNT(*) as count FROM click_events WHERE code = ? GROUP BY referrer ORDER BY count DESC",
+        "SELECT COALESCE(referrer, '(direct)') as referrer, COUNT(*) as count FROM click_events WHERE code = ? GROUP BY referrer ORDER BY count DESC LIMIT 20",
       )
       .all(req.params.code);
     res.json({ ...base, referrerBreakdown });
