@@ -10,6 +10,11 @@ It's demonstrated in this repo against a small URL-shortener service, but
 the shortener is the *fixture*, not the point -- see
 [docs/architecture.md](docs/architecture.md#reusability-engine-vs-agent-vs-playbook)
 for exactly what's domain-agnostic here and what's specific to this demo.
+Being the fixture doesn't mean its own code went unscrutinized, though --
+it was independently reviewed twice, cold, by a reviewer with no knowledge
+of how it was built, and real issues it found were fixed both times (see
+"Closed since: findings from an independent blind code review" in
+[final-engineering-summary.md](docs/final-engineering-summary.md)).
 
 ## What this demonstrates
 
@@ -68,7 +73,7 @@ See [docs/setup.md](docs/setup.md) for details.
 
 - [docs/architecture.md](docs/architecture.md) -- components, control flow, key decisions
 - [docs/setup.md](docs/setup.md) -- full usage, including demonstrating the resilience paths
-- [docs/final-engineering-summary.md](docs/final-engineering-summary.md) -- plan, rationale, risks/trade-offs, assumptions, limitations
+- [docs/final-engineering-summary.md](docs/final-engineering-summary.md) -- plan, rationale, risks/trade-offs, assumptions, limitations, and two independent blind-review passes on the generated shortener's own code quality (not just the orchestrator's)
 
 ## Contributing
 
